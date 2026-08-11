@@ -95,38 +95,47 @@ App 端不在本計畫範圍，其計畫歸屬見 Open Questions Q1。
 App 端要移除的東西（`_KeyboardShift`、`keyboardFocus` 橋接、`overlays-content`）**只存在於 P8 分支**，
 不在 `main`。
 
-- [ ] A. 視為 P8 的迭代四（建議）：留在 `fix/2608061146-p8-portrait-ux` 疊加。代價是兩 repo 的計畫 ID
+- [ ] A. 視為 P8 的迭代四：留在 `fix/2608061146-p8-portrait-ux` 疊加。代價是兩 repo 的計畫 ID
   與分支名不一致，偏離 Rule 19 的共用命名慣例（本計畫已於 Cross-Repo Scope 揭露）。
 - [ ] B. 先把 P8 合併進 main 再開新計畫：命名可對齊，但 P8 尚有 5 項未完成任務（D3/D4 實機、
   F17b/F18b、F10），現在歸檔並不適當。
 
-狀態：⏳ 待確認
+狀態：⏳ 待確認（2026-08-11 使用者決定延後）
+
+**不阻擋本計畫進入 Phase 3。** 本題的作用對象是 `sld-digital-lwd/upcc-middle-app`，
+依 `## Cross-Repo Scope` 宣告的相依順序，該 repo 本就排在本 repo 之後——契約提供方先完成
+並可被驗證，消費方才開始。待套件端的設定項與行為可驗證後再回頭拍板即可。
 
 ### Q2. 避讓的執行位置 — 影響：架構與 API 形狀
 攔下 IME 插邊之後，實際的位移由誰做？
 
-- [ ] A. 套件內部完成整套（建議）：套件自行平移 PlatformView 或內部捲動，使用端零程式碼。
+- [x] A. 套件內部完成整套：套件自行平移 PlatformView 或內部捲動，使用端零程式碼。
   符合本計畫「使用端不再負責」的目標。
 - [ ] B. 套件只攔插邊並把鍵盤高度暴露給使用端，位移仍由使用端做。範圍小，但沒有真正解決
   「使用端要重造」的問題。
 
-狀態：⏳ 待確認
+狀態：✅ 已確認
 
 ### Q3. 新設定項的名稱與預設值 — 影響：使用端 API 與上游 delta
-- [ ] A. `keyboardAvoidance`，預設**關閉**（建議）：本 repo 的保留鐵則要求 delta 極小且行為與上游
+- [x] A. `keyboardAvoidance`，預設**關閉**：本 repo 的保留鐵則要求 delta 極小且行為與上游
   一致；預設開啟等於讓 fork 與上游有隱性行為差異，日後同步時難以察覺。使用端明確打開即可。
 - [ ] B. 預設**開啟**：內建行為即為期望行為，使用端不必知道它存在。但與上游行為分歧。
 
 > 註：此題的建議與前身計畫（`camelot_inappwebview` 的 `2608111504`）相反。該計畫建議預設開啟，
 > 理由是「使用端不必知道它存在」；在零分歧為資產的新基底下，隱性行為差異的代價變高，故翻轉建議。
 
-狀態：⏳ 待確認
+狀態：✅ 已確認
 
 ### Q4. 平台範圍 — 影響：工作量
-- [ ] A. 本次只做 Android（建議）：問題與證據皆來自 Android；iOS 的 WKWebView 行為不同，需另行調查。
+- [x] A. **Android 優先**：問題與證據皆來自 Android；iOS 的 WKWebView 行為不同，需另行調查。
 - [ ] B. Android + iOS 一起做。
 
-狀態：⏳ 待確認
+狀態：✅ 已確認
+
+**「優先」不等於「只做」**：使用者的決議是 Android 先行，**iOS 未被排除**。本計畫的 Phase A–E
+只涵蓋 Android；iOS 待 Android 端驗證完成後另行評估，且評估前需先實測 WKWebView 在
+軟鍵盤彈出時的實際行為（是否也有第二個執行者、`ScrollFocusedEditableIntoView` 有無對應機制），
+不得沿用 Android 的結論推導。屆時依 Rule 8 判定為本計畫的 Iteration 或另開新計畫。
 
 ## Key Decisions
 
@@ -134,6 +143,15 @@ App 端要移除的東西（`_KeyboardShift`、`keyboardFocus` 橋接、`overlay
   平台基準較新（AGP 8.13.1、`compileSdk` 跟隨 SDK、podspec 與 SPM 並存），且維持
   `flutter_inappwebview_*` 讓使用端零遷移。完整比對見 `.kn-project/project.md`。
 - **變更以新增為主**（來源：保留鐵則）。理由：對既有邏輯改寫愈少，上游同步的衝突面愈小。
+- **避讓由套件內部完成整套**（來源：Q2）。理由：使用端零程式碼才真正消滅「使用端各自重造」，
+  只暴露鍵盤高度等於把問題推回去。代價是需在 PlatformView 層或 WebView 內部處理位移，delta 較大。
+- **`keyboardAvoidance` 預設關閉**（來源：Q3）。理由：預設開啟會讓 fork 與上游產生隱性行為差異，
+  日後拉取上游更新時難以察覺衝突；本 repo 以零分歧為資產，行為一致的優先序高於使用端便利。
+  **此決策與前身計畫相反**，因基底的取捨前提改變。
+- **Android 優先，iOS 未排除**（來源：Q4）。理由：實測證據皆來自 Android。iOS 需先獨立調查
+  WKWebView 的實際行為才能規劃，不得由 Android 結論推導。
+- **App 端歸屬延後決定**（來源：Q1，2026-08-11）。理由：依 Cross-Repo Scope 的相依順序，
+  消費方本就排在契約提供方之後，不阻擋本 repo 進入 Phase 3。
 
 ## Git Completion Policy
 
