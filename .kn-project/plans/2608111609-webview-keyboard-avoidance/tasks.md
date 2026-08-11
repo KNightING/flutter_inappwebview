@@ -33,7 +33,11 @@
 - [x] A2. 實機驗證 → **通過**。`resize=false` 時，關閉避讓量到 `offsetTop 0→346.9`（Chromium 平移
       5 幀），開啟避讓後 `offsetTop` 與 visual `height` **皆全程不變**，連 `resize` 事件都沒有。
       完整三格數據見 plan.md 的「Phase A 實測結果」
-- [ ] A3. 確認副作用範圍：文字選取把手、autofill 下拉、`visualViewport` 在 JS 端的回報
+- [x] A3. 副作用檢查 → 原生 UI **全數通過**（`<select>` 下拉、游標把手、選取把手、選字浮動
+      工具列皆位置正確且不被鍵盤遮蔽）。`visualViewport` 的回報行為改變已記入文件註解。
+      完整結果見 plan.md 的「Phase A3 副作用檢查結果」
+- [ ] A3b. **autofill 建議下拉未能驗證**——測試裝置無 autofill 資料，無候選即無下拉。
+      需在有 autofill 資料的裝置或建立測試資料後補驗，不得以「沒看到問題」視為通過
 - [ ] A4. 補量第 4 格（`resize=true` + `avoid=true`），確認兩者同時開啟無新的互相干擾
 
 ## Phase B — 設定項

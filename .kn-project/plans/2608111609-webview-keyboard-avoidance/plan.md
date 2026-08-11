@@ -78,6 +78,26 @@ Chromium 那段實作在 Android System WebView 內，無法修改；但**它的
 **結論三：鍵盤高度不需另外查詢。** 攔截後 visual viewport 不縮，套件唯一且最直接的鍵盤高度來源
 就是它自己攔下來的那個 inset 值。Phase C 的注入腳本因此只需回報焦點元素位置，不需回報視窗幾何。
 
+### Phase A3 副作用檢查結果（2026-08-11，同裝置）
+
+於最高風險狀態（`resize=false` + `avoid=true` + 鍵盤開啟）逐項檢查：
+
+| 項目 | 結果 |
+| :--- | :--- |
+| `<select>` 原生下拉 | ✅ 置中 modal 完整可見。開啟時系統自動收鍵盤，本就不與鍵盤共存 |
+| 游標把手 | ✅ 位置正確 |
+| 選取把手 | ✅ 兩端精準貼齊選取範圍 |
+| 選字浮動工具列（剪下／複製／全選） | ✅ 與鍵盤共存，向上開啟且完整可見 |
+| `visualViewport` JS 回報 | ⚠️ 行為契約改變，見下 |
+| autofill 建議下拉 | ❓ 裝置無 autofill 資料，**無法驗證**，非「已通過」 |
+
+**原生彈出層不受影響的原因**：這些浮動視窗由系統的 `ViewRootImpl` 依真實 IME 狀態定位，
+不是讀 WebView 這個子 View 收到的插邊——本計畫攔的是後者。兩者是不同的來源，因此互不干擾。
+
+**`visualViewport` 是必然後果，不是缺陷**：攔截後 WebView 全程不知道鍵盤存在，`visualViewport`
+的 `height` 與 `offsetTop` 皆不變。任何以「`visualViewport` 縮小」偵測鍵盤的網頁程式碼會**靜默
+失效**——不報錯，只是永遠不觸發。已寫入 `keyboardAvoidance` 的 Dart 文件註解。
+
 ### 與上游 delta 的約束
 
 本 repo 與上游 master 零分歧是刻意維持的資產（見 `.kn-project/project.md` 保留鐵則）。

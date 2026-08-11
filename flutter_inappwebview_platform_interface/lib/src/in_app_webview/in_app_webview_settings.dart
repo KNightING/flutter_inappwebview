@@ -1199,6 +1199,14 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///
   ///Requires Android 11 (API 30) or above, where IME insets are reported as a distinct
   ///inset type. Below that the option is ignored.
+  ///
+  ///**Affects `visualViewport` in the page.** Because the WebView never learns the keyboard
+  ///is there, `window.visualViewport` keeps reporting the same `height` and `offsetTop`
+  ///while the keyboard is open. Page code that detects the keyboard by watching
+  ///`visualViewport` shrink will silently stop detecting it -- no error, it simply never
+  ///fires. Native text selection handles, the selection toolbar and `<select>` popups are
+  ///unaffected: the system positions those from the real IME state, not from the insets
+  ///delivered to this View.
   @SupportedPlatforms(platforms: [AndroidPlatform()])
   bool? keyboardAvoidance;
 
