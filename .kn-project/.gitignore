@@ -1,0 +1,3 @@
+# 上游根目錄的 .gitignore 有一條 `plans/`，會把本治理目錄的 .kn-project/plans/ 一併排除。
+# 在此就地反排除，避免修改上游檔案（保留鐵則：新增優先於改寫，delta 保持極小）。
+!plans/
