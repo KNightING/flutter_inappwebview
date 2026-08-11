@@ -48,14 +48,29 @@
 - [x] B4. 攔截受設定閘控——`setKeyboardAvoidanceEnabled(false)` 將監聽器設回 `null`，不安裝任何東西
 
 ## Phase C — 避讓實作（套件內部完成整套，Q2=A）
-- [ ] C1. 焦點元素位置的注入腳本（放 `plugin_scripts_js/`），回報焦點元素在 viewport 中的位置。
-      **不需回報視窗幾何**——攔截後 visual viewport 不縮，鍵盤高度直接取自攔下來的 inset
-- [ ] C2. 以攔下來的 IME inset 高度與 C1 的焦點位置計算位移量
-- [ ] C3. 實作位移：於 `FlutterWebView`（PlatformView 層）或 WebView 內部捲動擇一，
-      實作前先比較兩者對上游 delta 的影響，取較小者
-- [ ] C4. 使用端零程式碼驗證：example 不宣告 `resizeToAvoidBottomInset: false`、
-      不自行平移、不改 viewport meta 的情況下即可正常避讓
+- [x] C1. `KeyboardAvoidanceJS`（`plugin_scripts_js/`）回報焦點元素 `getBoundingClientRect().bottom`
+      與 `devicePixelRatio`。走專屬 `@JavascriptInterface` 而非 `callHandler`——後者需往返 Dart，
+      對要趕在鍵盤動畫內落地的位移太慢，且會為從不離開原生層的資料鋪 Dart 管線
+- [x] C2. `KeyboardAvoidanceController` 以攔下來的 IME inset 高度計算位移，夾在鍵盤高度以內
+- [x] C3. 位移實作：**平移 PlatformView**（使用者於 2026-08-11 拍板）。`setTranslationY` 於
+      WebView 本身，內容不重排；露出的空白條被鍵盤蓋住，故位移量必須 ≤ 鍵盤高度
+- [x] C3b. 實測通過：焦點欄位浮於鍵盤上方，間距 24px（`MARGIN_DP=8` × density 2.75 = 22px，吻合）。
+      **鍵盤開啟時跨欄位移動焦點亦正確重算**——先前標記的缺口確認不存在
+- [ ] C4. 使用端零程式碼驗證：example 不自行平移、不改 viewport meta 即可正常避讓
+      （`resizeToAvoidBottomInset: false` 仍需使用端宣告，見 Goals 的修正）
 - [ ] C5. 關閉設定時完全不介入（回到上游原行為）— 保留鐵則的硬性要求，非選配
+
+## Phase C 已知缺陷 — 執行期切換無效
+- [ ] C6. `keyboardAvoidance` 於 `setSettings` 執行期由 `false` 改為 `true` **不會生效**，
+      且會產生比不開更糟的狀態：插邊攔截立刻生效（純 View 層），但注入腳本未註冊、
+      無人回報焦點位置，於是兩個執行者都不動作，輸入框被鍵盤完全遮住。
+      成因：`addPluginScript` 在 `prepare()` 時依當下設定登記；重新載入只會重新注入
+      controller 內已登記的腳本，**補不回當初沒登記的**（此點經實測推翻「重載即可」的初判）。
+      處置二擇一，待決：
+      - A. 啟用當下以 `evaluateJavascript` 補注入。代價：`addJavascriptInterface` 仍需重載才綁得上，
+        故回報路徑得改走既有 JS bridge，退回原本刻意避開的 Dart 往返
+      - B. 文件明確限定只能於 `initialSettings` 指定，`setSettings` 偵測到變更時記 warning。
+        範圍最小、行為最誠實，代價是失去彈性
 
 ## Phase D — 驗證
 - [ ] D1. 套件自帶 example 專案驗證開／關兩種設定

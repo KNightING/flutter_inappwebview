@@ -80,6 +80,7 @@ import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.Interc
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.JavaScriptBridgeJS;
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.OnLoadResourceJS;
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.OnWindowBlurEventJS;
+import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.KeyboardAvoidanceJS;
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.OnWindowFocusEventJS;
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.PluginScriptsUtil;
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.PrintJS;
@@ -613,6 +614,9 @@ final public class InAppWebView extends InputAwareWebView implements InAppWebVie
               customSettings.pluginScriptsForMainFrameOnly));
       userContentController.addPluginScript(OnWindowBlurEventJS.ON_WINDOW_BLUR_EVENT_JS_PLUGIN_SCRIPT(customSettings.pluginScriptsOriginAllowList));
       userContentController.addPluginScript(OnWindowFocusEventJS.ON_WINDOW_FOCUS_EVENT_JS_PLUGIN_SCRIPT(customSettings.pluginScriptsOriginAllowList));
+      if (customSettings.keyboardAvoidance) {
+        userContentController.addPluginScript(KeyboardAvoidanceJS.KEYBOARD_AVOIDANCE_JS_PLUGIN_SCRIPT(customSettings.pluginScriptsOriginAllowList));
+      }
       interceptOnlyAsyncAjaxRequestsPluginScript = InterceptAjaxRequestJS.createInterceptOnlyAsyncAjaxRequestsPluginScript(customSettings.interceptOnlyAsyncAjaxRequests);
       if (customSettings.useShouldInterceptAjaxRequest) {
         userContentController.addPluginScript(interceptOnlyAsyncAjaxRequestsPluginScript);

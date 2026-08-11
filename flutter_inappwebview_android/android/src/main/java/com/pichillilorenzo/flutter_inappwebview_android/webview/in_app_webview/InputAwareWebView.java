@@ -17,6 +17,8 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.KeyboardAvoidanceJS;
+
 /**
  * A WebView subclass that mirrors the same implementation hacks that the system WebView does in
  * order to correctly create an InputConnection.
@@ -32,6 +34,8 @@ public class InputAwareWebView extends WebView {
   private View threadedInputConnectionProxyView;
   private ThreadedInputConnectionProxyAdapterView proxyAdapterView;
   private boolean useHybridComposition = false;
+  @Nullable
+  private KeyboardAvoidanceController keyboardAvoidanceController;
 
   public InputAwareWebView(Context context, @Nullable View containerView, Boolean useHybridComposition) {
     super(context);
@@ -70,6 +74,10 @@ public class InputAwareWebView extends WebView {
   public void setKeyboardAvoidanceEnabled(boolean enabled) {
     if (!enabled) {
       ViewCompat.setOnApplyWindowInsetsListener(this, null);
+      if (keyboardAvoidanceController != null) {
+        keyboardAvoidanceController.reset();
+        keyboardAvoidanceController = null;
+      }
       return;
     }
 
@@ -81,7 +89,17 @@ public class InputAwareWebView extends WebView {
       return;
     }
 
+    keyboardAvoidanceController = new KeyboardAvoidanceController(this);
+    addJavascriptInterface(keyboardAvoidanceController, KeyboardAvoidanceJS.getInterfaceName());
+
     ViewCompat.setOnApplyWindowInsetsListener(this, (view, insets) -> {
+      // Read the IME height before discarding it -- this is the only place it is available, and
+      // the WebView is about to be told the keyboard does not exist.
+      int imeHeightPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+      if (keyboardAvoidanceController != null) {
+        keyboardAvoidanceController.setKeyboardHeightPx(imeHeightPx);
+      }
+
       WindowInsetsCompat withoutIme = new WindowInsetsCompat.Builder(insets)
         .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
         .build();
