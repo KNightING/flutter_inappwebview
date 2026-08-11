@@ -35,6 +35,14 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
 
+# flutter_inappwebview_android 把 flutter_inappwebview_platform_interface 宣告為 hosted 依賴
+# （其 pubspec 的 path: 那行是註解掉的），而本 example 用 path 依賴。pub 無法為同一個套件
+# 統一 hosted 與 path 兩種來源，不覆寫就會 version solving failed。
+# 這是本 example 唯一的衝突套件，故只覆寫它一項。
+dependency_overrides:
+  flutter_inappwebview_platform_interface:
+    path: ../../flutter_inappwebview_platform_interface
+
 dev_dependencies:
   integration_test:
     sdk: flutter
