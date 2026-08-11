@@ -351,6 +351,8 @@ final public class InAppWebView extends InputAwareWebView implements InAppWebVie
     setVerticalScrollBarEnabled(!customSettings.disableVerticalScroll && customSettings.verticalScrollBarEnabled);
     setHorizontalScrollBarEnabled(!customSettings.disableHorizontalScroll && customSettings.horizontalScrollBarEnabled);
 
+    setKeyboardAvoidanceEnabled(customSettings.keyboardAvoidance);
+
     if (customSettings.transparentBackground)
       setBackgroundColor(Color.TRANSPARENT);
 
@@ -1142,6 +1144,9 @@ final public class InAppWebView extends InputAwareWebView implements InAppWebVie
 
     if (newSettingsMap.get("disableHorizontalScroll") != null && customSettings.disableHorizontalScroll != newCustomSettings.disableHorizontalScroll)
       setHorizontalScrollBarEnabled(!newCustomSettings.disableHorizontalScroll && newCustomSettings.horizontalScrollBarEnabled);
+
+    if (newSettingsMap.get("keyboardAvoidance") != null && customSettings.keyboardAvoidance != newCustomSettings.keyboardAvoidance)
+      setKeyboardAvoidanceEnabled(newCustomSettings.keyboardAvoidance);
 
     if (newSettingsMap.get("overScrollMode") != null && !customSettings.overScrollMode.equals(newCustomSettings.overScrollMode))
       setOverScrollMode(newCustomSettings.overScrollMode);

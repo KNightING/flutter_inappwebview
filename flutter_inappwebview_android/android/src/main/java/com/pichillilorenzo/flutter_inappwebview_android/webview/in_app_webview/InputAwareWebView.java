@@ -13,6 +13,9 @@ import android.webkit.WebView;
 import android.widget.ListPopupWindow;
 
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 /**
  * A WebView subclass that mirrors the same implementation hacks that the system WebView does in
@@ -49,6 +52,43 @@ public class InputAwareWebView extends WebView {
   public InputAwareWebView(Context context, AttributeSet attrs, int defaultStyle) {
     super(context, attrs, defaultStyle);
     this.containerView = null;
+  }
+
+  /**
+   * Installs or removes the listener that hides the IME window insets from the system WebView.
+   *
+   * <p>Chromium reacts to IME insets by running its own {@code ScrollFocusedEditableIntoView},
+   * which translates the visual viewport. That makes it a second actor competing with any keyboard
+   * avoidance the app performs, and the two shifts add up before snapping back. Chromium's side
+   * lives inside the Android System WebView and cannot be changed, but it only triggers when this
+   * View actually receives IME insets -- which is what this intercepts.
+   *
+   * <p>Nothing is installed while disabled, so the WebView behaves exactly as it does upstream.
+   *
+   * @param enabled whether the IME insets should be hidden from the WebView
+   */
+  public void setKeyboardAvoidanceEnabled(boolean enabled) {
+    if (!enabled) {
+      ViewCompat.setOnApplyWindowInsetsListener(this, null);
+      return;
+    }
+
+    // IME insets are only reported as a distinct type from API 30 (R). Below that they arrive
+    // merged into the system window insets, where they cannot be separated from the navigation
+    // bar without guessing -- so the interception is not attempted there.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      Log.w(LOG_TAG, "keyboardAvoidance requires Android 11 (API 30) or above; ignoring.");
+      return;
+    }
+
+    ViewCompat.setOnApplyWindowInsetsListener(this, (view, insets) -> {
+      WindowInsetsCompat withoutIme = new WindowInsetsCompat.Builder(insets)
+        .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
+        .build();
+      // The listener replaces the View's own onApplyWindowInsets, so the (modified) insets still
+      // have to be handed to the WebView explicitly -- otherwise it sees no insets at all.
+      return ViewCompat.onApplyWindowInsets(view, withoutIme);
+    });
   }
 
   public void setContainerView(View containerView) {

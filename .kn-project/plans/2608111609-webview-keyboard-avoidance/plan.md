@@ -18,6 +18,18 @@
 具體要消滅的是使用端目前被迫做的四件事：宣告 `Scaffold.resizeToAvoidBottomInset: false`、
 自行平移 WebView widget、以 viewport meta 壓抑瀏覽器行為、以及自建一條 JS→原生的焦點位置回報橋接。
 
+> [!IMPORTANT]
+> **2026-08-11 實測修正：第 1 項做不到，必須留給使用端。**
+> `Scaffold.resizeToAvoidBottomInset` 是 Flutter framework 依 engine 的 `viewInsets` 做的版面
+> 計算，與本計畫攔截的 Android `View` 插邊是**兩條各自獨立的通道**；套件在 PlatformView 底下
+> 攔插邊，擋不到上層的 Scaffold。實測見下方「Phase A 實測結果」第 1 格：該項維持預設 `true` 時，
+> WebView 仍被縮小（`innerHeight` 766→402）。
+>
+> 第 3 項（`interactive-widget` meta）依實測**推測不再需要**（第 3 格連 visual viewport 都沒縮，
+> 該 meta 要壓抑的行為已不存在），但尚未直接驗證，列為 Phase D 的待驗項。
+>
+> 因此本計畫實際消滅的是第 2 與第 4 項，並使第 3 項很可能變得多餘。
+
 ## Architecture
 
 ### 問題的本質（實測結論，非推論）
@@ -42,6 +54,29 @@ Chromium 那段實作在 Android System WebView 內，無法修改；但**它的
 避讓量需要「焦點元素位置」，該資訊只有 DOM 有，故套件需自備一段注入腳本回報，不再由使用端各自搭橋。
 
 新增的跨平台設定沿既有路徑：`platform_interface` 宣告 → `_android` 解析 → app-facing 透傳。
+
+### Phase A 實測結果（2026-08-11，裝置 `M4AIB763K212ZBA`，Android 1080x2400 / density 440）
+
+量測工具為 `kb_probe`（scratchpad 內的獨立 App，不在本 repo）：單一 WebView、輸入框
+`position:absolute;bottom:0`、頁面 `200vh`，於 `visualViewport` 的 `resize` / `scroll` 與輸入框的
+`focus` / `blur` 回報四個數字。`Scaffold.resizeToAvoidBottomInset` 與 `keyboardAvoidance` 各自可切換。
+
+| `resize` | `avoid` | `offsetTop` | visual `height` | `innerHeight` | 誰在動 |
+| :--- | :--- | :--- | ---: | ---: | :--- |
+| `true` | `false` | 全程 0 | 750.9 → 394.5 | 766 → 402 | **只有執行者 1**（Flutter 縮 WebView） |
+| `false` | `false` | **0 → 346.9**（5 幀） | 750.9 → 418.9 | 766 不變 | **執行者 2 現形**（Chromium 平移） |
+| `false` | `true` | 14.9 不變 | 750.9 不變 | 766 不變 | **兩者皆靜默** |
+
+**結論一：攔截有效，核心假設成立。** 第 3 格連一次 `resize` 事件都沒有——不只是不平移，WebView
+完全不知道鍵盤存在。`ScrollFocusedEditableIntoView` 確實只在該 View 收得到 IME 插邊時才觸發。
+
+**結論二：兩個執行者不會同時出現，是互斥的。** 第 1 格證明 Flutter 縮 WebView 之後，釘在底部的
+輸入框重排後仍可見，Chromium 沒有東西需要捲進視野，執行者 2 因此不觸發。原計畫「兩者互相打架」
+的敘述需修正為：**執行者 2 只在使用端關掉執行者 1 之後才登場**。使用端當初正是為了消掉掉幀而
+關掉執行者 1，才撞上執行者 2。
+
+**結論三：鍵盤高度不需另外查詢。** 攔截後 visual viewport 不縮，套件唯一且最直接的鍵盤高度來源
+就是它自己攔下來的那個 inset 值。Phase C 的注入腳本因此只需回報焦點元素位置，不需回報視窗幾何。
 
 ### 與上游 delta 的約束
 
@@ -152,6 +187,19 @@ App 端要移除的東西（`_KeyboardShift`、`keyboardFocus` 橋接、`overlay
   WKWebView 的實際行為才能規劃，不得由 Android 結論推導。
 - **App 端歸屬延後決定**（來源：Q1，2026-08-11）。理由：依 Cross-Repo Scope 的相依順序，
   消費方本就排在契約提供方之後，不阻擋本 repo 進入 Phase 3。
+- **Goals 第 1 項（`resizeToAvoidBottomInset`）退出範圍**（來源：Phase A 實測第 1 格）。
+  理由：那是 Flutter framework 讀 engine `viewInsets` 的行為，與套件攔截的 Android View 插邊是
+  兩條獨立通道，架構上就擋不到。使用端仍須自行宣告。已同步修正 `keyboardAvoidance` 的 Dart 文件註解。
+- **Phase B 先於 Phase A 執行**（來源：2026-08-11 執行判斷）。理由：B4 要求攔截受設定閘控且
+  Q3 決議預設關閉；照原順序做，A1 完成到 B4 之間會有一段無條件改變上游行為的狀態，且 A2 的實機
+  驗證無從打開開關。改為 B→A 後每一步皆可驗證，且不需要「暫時把預設值設成 true」這種易忘的權宜。
+- **攔截以 `ViewCompat.setOnApplyWindowInsetsListener` 實作，而非覆寫 `onApplyWindowInsets`**
+  （來源：2026-08-11 實作判斷）。理由：文件承諾「關閉時不安裝監聽」，覆寫的話該承諾字面上不成立。
+  監聽器內必須顯式呼叫 `ViewCompat.onApplyWindowInsets` 把改過的插邊交回，否則 WebView 會收到
+  「完全沒有插邊」而非「沒有 IME 插邊」，狀態列與導航列的讓位會一起壞掉。
+- **僅支援 API 30+**（來源：2026-08-11 實作判斷）。理由：IME 插邊自 API 30 才是獨立的 inset type；
+  更早版本它混在 system window insets 內，與導航列無法分離，硬拆等於猜測。低於此版本記錄 warning
+  並不介入，不佯裝有效。
 
 ## Git Completion Policy
 

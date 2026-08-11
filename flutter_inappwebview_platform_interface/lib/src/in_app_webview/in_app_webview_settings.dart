@@ -1175,6 +1175,33 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   )
   bool? useHybridComposition;
 
+  ///Set to `true` to let the plugin keep the focused input element visible when the
+  ///soft keyboard opens. The default value is `false`.
+  ///
+  ///When enabled, the plugin consumes the IME window insets before they reach the
+  ///WebView. That stops Chromium from running its own `ScrollFocusedEditableIntoView`,
+  ///which otherwise competes with any avoidance the app performs and produces a
+  ///doubled-then-reset jump. The plugin then performs the shift itself, so it is the
+  ///only actor.
+  ///
+  ///With this enabled the app no longer needs to shift the WebView widget itself, nor build
+  ///its own JS-to-native bridge reporting the focused element position.
+  ///
+  ///The app **still** has to set `Scaffold.resizeToAvoidBottomInset` to `false` itself.
+  ///That resize is Flutter framework layout driven by the engine's `viewInsets`, which is
+  ///a separate channel from the Android `View` insets this option intercepts -- the plugin
+  ///cannot suppress it from below. Leaving it at its default `true` means the framework
+  ///shrinks the WebView, and this option then has nothing to do, because Chromium only
+  ///translates the viewport when the WebView is *not* resized.
+  ///
+  ///When `false` the plugin does not install the insets listener at all, so behaviour is
+  ///identical to not having this option.
+  ///
+  ///Requires Android 11 (API 30) or above, where IME insets are reported as a distinct
+  ///inset type. Below that the option is ignored.
+  @SupportedPlatforms(platforms: [AndroidPlatform()])
+  bool? keyboardAvoidance;
+
   ///Set to `true` to be able to listen at the [PlatformWebViewCreationParams.shouldInterceptRequest] event.
   ///
   ///If the [PlatformWebViewCreationParams.shouldInterceptRequest] event is implemented and this value is `null`,
@@ -3352,6 +3379,7 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
     this.regexToCancelSubFramesLoading,
     this.regexToAllowSyncUrlLoading,
     this.useHybridComposition = true,
+    this.keyboardAvoidance = false,
     this.useShouldInterceptRequest,
     this.useOnRenderProcessGone,
     this.overScrollMode = OverScrollMode_.IF_CONTENT_SCROLLS,
