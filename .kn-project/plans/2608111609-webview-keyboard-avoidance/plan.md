@@ -3,9 +3,24 @@
 
 - Created: 2026-08-11
 - Issue: N/A（無 issue 追蹤基準——本 repo 為 fork，GitHub Issues 已停用）
-- Branch: `feature/2608111609-webview-keyboard-avoidance`（尚未建立）
-- Status: Planning
+- Branch: `feature/2608111609-webview-keyboard-avoidance`
+- Status: In Progress
 - Completed: [Wait for Finish]
+
+> [!WARNING]
+> **2026-08-12：本分支已提前合併進 `main`，但計畫尚未完成，刻意不歸檔。**
+>
+> 合併原因與本計畫無關——`2608121003-agp-9-upgrade` 需要可建置的 example 作為基準，
+> 而該修復（`1c12f440f`）只存在於本分支；使用者於該計畫的 Q1 選擇「先合併再做 AGP」。
+>
+> **`main` 上因此存在一個預設開啟、但下列驗證尚未執行的功能**：
+> - Phase D 全部：掉幀量測、三條關閉路徑（點空白處／收合鈕／邊緣滑動手勢）、轉向、
+>   焦點位於內部捲動容器
+> - A3b：autofill 建議下拉未驗證（測試裝置無 autofill 資料）
+> - C4／C5 尚未執行
+>
+> A1／A2／A3／A4 與 C1–C3 已實測通過。未完成項目見 `tasks.md`。
+> **歸檔須待上述結清，不得因已合併而視為完成。**
 
 > 前身為 `KNightING/camelot_inappwebview` 的計畫 `2608111504`，隨基底改為本 repo 而移轉。
 > 下方「問題的本質」是該計畫的實測結論，與基底無關，直接沿用未重新調查；
