@@ -3,9 +3,17 @@
 
 - Created: 2026-08-12
 - Issue: N/A（無 issue 追蹤基準——本 repo 為 fork，GitHub Issues 已停用）
-- Branch: `feature/2608121003-agp-9-upgrade`（尚未建立）
-- Status: Planning
-- Completed: [Wait for Finish]
+- Branch: `feature/2608121003-agp-9-upgrade`
+- Status: Awaiting Archive
+- Completed: 2026-08-12
+
+> **結果：目標版本直接達成，Q2 的退版未觸發。**
+> AGP 8.13.2 → 9.3.0、Gradle 8.13 → 9.5.0，僅需移除一個在 AGP 9.0 被移除的選項
+> （`android.defaults.buildfeatures.buildconfig`），Kotlin 維持 2.2.20 未動。
+> 兩個 example 皆可建置、release 走完 R8／minify、實機執行無 FATAL。
+>
+> **唯一未結清項**：C5——`android.nonTransitiveRClass` 與 `android.nonFinalResIds` 刻意保留，
+> 因其為行為旗標而非語法，移除屬行為變更，超出本計畫宣告的範圍。
 
 ## Goals
 
