@@ -122,9 +122,31 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
     
     // Fix https://github.com/pichillilorenzo/flutter_inappwebview/issues/1947
     private var _scrollViewContentInsetAdjusted = false
+    // The contentInset value replaced by the issue #1947 fix, so keyboardWillHide can put it back.
+    // Without this the negative inset applied on show outlives the keyboard.
+    private var _scrollViewContentInsetBeforeAdjust: UIEdgeInsets? = nil
+    // Scroll position captured when the keyboard appeared, restored when it hides.
+    // WebKit scrolls the focused element into view on its own but never undoes that scroll,
+    // so the page is left displaced once the keyboard is gone.
+    private var _contentOffsetBeforeKeyboard: CGPoint? = nil
+    // Bumped on every keyboard appearance so a restore scheduled by an earlier hide can tell
+    // it has been superseded and skip itself.
+    private var _keyboardSessionToken = 0
+
     @objc func keyboardWillShow(notification: NSNotification) {
+        // The keyboard coming back means the previous hide was a focus change between fields,
+        // not the user leaving the input, so any restore still queued must not run.
+        _keyboardSessionToken += 1
+
         // UIResponder.keyboardWillShowNotification will be fired also
         // when changing focus between HTML inputs with the keyboard already open
+        if isKeyboardAvoidanceEnabled {
+            captureContentOffsetForKeyboardAvoidance()
+            // The keyboard inset is deliberately left in place: it is what gives the document
+            // room to scroll, without which WebKit cannot reveal a field on a short page.
+            return
+        }
+
         if (scrollView.adjustedContentInset != .zero) {
             // if resizeToAvoidBottomInset is false on Flutter side,
             // scrollView.adjustedContentInset.bottom will be > 0
@@ -132,6 +154,7 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
                 // if the scrollView.contentInset has already been fixed, do nothing
                 if !_scrollViewContentInsetAdjusted {
                     _scrollViewContentInsetAdjusted = true
+                    _scrollViewContentInsetBeforeAdjust = scrollView.contentInset
                     let insetToAdjust = scrollView.adjustedContentInset
                     scrollView.contentInset = UIEdgeInsets(top: -insetToAdjust.top, left: -insetToAdjust.left,
                                                            bottom: -insetToAdjust.bottom, right: -insetToAdjust.right)
@@ -141,10 +164,82 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
             }
         }
     }
+
     @objc func keyboardWillHide(notification: NSNotification) {
         _scrollViewContentInsetAdjusted = false
+        restoreContentInsetAfterKeyboard()
+        scheduleContentOffsetRestore()
     }
-    
+
+    private var isKeyboardAvoidanceEnabled: Bool {
+        return settings?.keyboardAvoidance ?? true
+    }
+
+    /// Remembers the scroll position once per keyboard session; refocusing between fields
+    /// fires keyboardWillShow again and must not overwrite the pre-keyboard position.
+    /// A stored offset therefore always belongs to the session that captured it -- whoever
+    /// decides not to restore has to clear it, or the next session inherits a stale anchor.
+    private func captureContentOffsetForKeyboardAvoidance() {
+        guard _contentOffsetBeforeKeyboard == nil else {
+            return
+        }
+        _contentOffsetBeforeKeyboard = scrollView.contentOffset
+    }
+
+    /// Undoes the issue #1947 inset replacement. Runs whether or not avoidance is enabled:
+    /// leaving a negative inset behind after the keyboard is gone is a defect either way.
+    private func restoreContentInsetAfterKeyboard() {
+        guard let originalInset = _scrollViewContentInsetBeforeAdjust else {
+            return
+        }
+        _scrollViewContentInsetBeforeAdjust = nil
+        scrollView.contentInset = originalInset
+    }
+
+    /// Defers the restore by one runloop so it can be re-checked once the responder state has
+    /// settled. Restoring straight from keyboardWillHide is too eager: the keyboard also hides
+    /// when focus moves to something that is not a text field -- tapping a `<select>` is the
+    /// clear case -- and scrolling the page back then drags the element the user is working
+    /// with out from under the native popup that was just anchored to it.
+    private func scheduleContentOffsetRestore() {
+        guard isKeyboardAvoidanceEnabled, _contentOffsetBeforeKeyboard != nil else {
+            return
+        }
+
+        let token = _keyboardSessionToken
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else {
+                return
+            }
+            // The keyboard came back in the meantime: this hide was a focus change, not an exit.
+            guard token == self._keyboardSessionToken else {
+                return
+            }
+            // A native surface is on screen anchored to where the page currently sits -- the
+            // `<select>` popup is the case that shows up here -- so the user has not left the
+            // position they are working at. Scrolling now would slide the element out from
+            // under it.
+            //
+            // The captured offset is dropped rather than kept: the page is staying where it is,
+            // so that offset is no longer where this page "was". Keeping it would make the next
+            // keyboard session restore to a position from two interactions ago, since the
+            // capture below only runs when nothing is stored yet.
+            //
+            // First responder cannot be used for this: measured on iOS 26, the WebView subtree
+            // reports `isFirstResponder` as true both after a plain blur and while the popup is
+            // up, so it separates nothing.
+            guard self.window?.rootViewController?.presentedViewController == nil else {
+                self._contentOffsetBeforeKeyboard = nil
+                return
+            }
+            guard let originalOffset = self._contentOffsetBeforeKeyboard else {
+                return
+            }
+            self._contentOffsetBeforeKeyboard = nil
+            self.scrollView.setContentOffset(originalOffset, animated: true)
+        }
+    }
+
     required public init(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)!
     }

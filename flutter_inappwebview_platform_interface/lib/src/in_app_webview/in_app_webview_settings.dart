@@ -1178,11 +1178,27 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///Set to `false` to stop the plugin keeping the focused input element visible when the
   ///soft keyboard opens. The default value is `true`.
   ///
-  ///When enabled, the plugin consumes the IME window insets before they reach the
-  ///WebView. That stops Chromium from running its own `ScrollFocusedEditableIntoView`,
-  ///which otherwise competes with any avoidance the app performs and produces a
-  ///doubled-then-reset jump. The plugin then performs the shift itself, so it is the
-  ///only actor.
+  ///**The two platforms reach that outcome through different mechanisms.** The guarantee
+  ///the option makes -- the app writes no keyboard-handling code of its own -- is the same
+  ///on both, but what the plugin actually does is not, so do not carry conclusions across.
+  ///
+  ///**Android: suppress and shift.** The plugin consumes the IME window insets before they
+  ///reach the WebView. That stops Chromium from running its own
+  ///`ScrollFocusedEditableIntoView`, which otherwise competes with any avoidance the app
+  ///performs and produces a doubled-then-reset jump. The plugin then performs the shift
+  ///itself, so it is the only actor.
+  ///
+  ///**iOS: leave WebKit alone and complete it.** WebKit already reveals the focused field
+  ///correctly, and there is no public API to suppress it, so the plugin does not try. It
+  ///supplies the two pieces WebKit leaves out: the keyboard inset is kept in place so the
+  ///document has room to scroll (without it a short page cannot scroll at all and the field
+  ///stays covered), and the scroll position captured when the keyboard appeared is restored
+  ///when it hides -- WebKit never undoes its own scroll, leaving the page displaced.
+  ///Measured on iPad / iOS 26: the page was left scrolled by 204px and 265px across two
+  ///dismissal paths.
+  ///
+  ///Consequently `visualViewport` **keeps reporting the keyboard on iOS** (see the Android
+  ///note below, which does not apply there), and the WebView itself is never moved.
   ///
   ///With this enabled the app no longer needs to shift the WebView widget itself, nor build
   ///its own JS-to-native bridge reporting the focused element position.
@@ -1208,24 +1224,25 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///identical to not having this option.
   ///
   ///Requires Android 11 (API 30) or above, where IME insets are reported as a distinct
-  ///inset type. Below that the option is ignored.
+  ///inset type. Below that the option is ignored. On iOS it requires 17.2 or above, which
+  ///is where the plugin observes the keyboard notifications this option builds on.
   ///
-  ///**Can only be enabled through the initial settings.** Turning it on later through
-  ///`setSettings` is ignored and logs a warning. The script that reports the focused
-  ///element is registered while the WebView is being prepared, and reloading only
+  ///**Android only -- can only be enabled through the initial settings.** Turning it on
+  ///later through `setSettings` is ignored and logs a warning. The script that reports the
+  ///focused element is registered while the WebView is being prepared, and reloading only
   ///re-injects scripts that were already registered, so it cannot be added afterwards.
   ///Applying only the inset interception would silence Chromium with nothing left to move
   ///the field into view, which is worse than leaving the option off. Turning it *off* at
   ///runtime does work and restores the original behaviour.
   ///
-  ///**Affects `visualViewport` in the page.** Because the WebView never learns the keyboard
-  ///is there, `window.visualViewport` keeps reporting the same `height` and `offsetTop`
-  ///while the keyboard is open. Page code that detects the keyboard by watching
-  ///`visualViewport` shrink will silently stop detecting it -- no error, it simply never
-  ///fires. Native text selection handles, the selection toolbar and `<select>` popups are
-  ///unaffected: the system positions those from the real IME state, not from the insets
-  ///delivered to this View.
-  @SupportedPlatforms(platforms: [AndroidPlatform()])
+  ///**Android only -- affects `visualViewport` in the page.** Because the WebView never
+  ///learns the keyboard is there, `window.visualViewport` keeps reporting the same
+  ///`height` and `offsetTop` while the keyboard is open. Page code that detects the
+  ///keyboard by watching `visualViewport` shrink will silently stop detecting it -- no
+  ///error, it simply never fires. Native text selection handles, the selection toolbar
+  ///and `<select>` popups are unaffected: the system positions those from the real IME
+  ///state, not from the insets delivered to this View.
+  @SupportedPlatforms(platforms: [AndroidPlatform(), IOSPlatform()])
   bool? keyboardAvoidance;
 
   ///Set to `true` to be able to listen at the [PlatformWebViewCreationParams.shouldInterceptRequest] event.
