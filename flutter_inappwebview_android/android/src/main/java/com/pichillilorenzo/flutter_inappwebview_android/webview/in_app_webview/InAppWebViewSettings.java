@@ -132,9 +132,8 @@ public class InAppWebViewSettings implements ISettings<InAppWebViewInterface> {
   public Boolean disableDefaultErrorPage = false;
   public Boolean useHybridComposition = true;
   // Consume the IME window insets before they reach the WebView so Chromium does not run its own
-  // ScrollFocusedEditableIntoView, then perform the shift here instead. Defaults to false so
-  // behaviour stays identical to upstream unless the app opts in.
-  public Boolean keyboardAvoidance = false;
+  // ScrollFocusedEditableIntoView, then perform the shift here instead.
+  public Boolean keyboardAvoidance = true;
   @Nullable
   public String verticalScrollbarThumbColor;
   @Nullable

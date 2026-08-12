@@ -61,7 +61,16 @@
 - [ ] C5. 關閉設定時完全不介入（回到上游原行為）— 保留鐵則的硬性要求，非選配
 
 ## Phase C 已知缺陷 — 執行期切換無效
-- [ ] C6. `keyboardAvoidance` 於 `setSettings` 執行期由 `false` 改為 `true` **不會生效**，
+- [x] C6. **已處置：採 B（文件限定 + 拒絕套用）**。使用者於 2026-08-11 拍板。
+      `setSettings` 偵測到 `false → true` 時記 warning 並**拒絕套用**，不做半套；
+      `true → false` 仍允許且立即生效（監聽移除、位移歸零、controller 再也收不到鍵盤高度，
+      算出的位移恆為 0）。Dart 文件註解已載明只能於 `initialSettings` 指定。
+      未採 A 的理由：`addJavascriptInterface` 仍需重載才綁得上，回報路徑得改走 JS bridge，
+      會讓**所有**情境退回 Dart 往返，代價由主要路徑承擔卻只為服務邊緣案例。
+
+<details><summary>原始缺陷描述（保留以供追溯）</summary>
+
+      `keyboardAvoidance` 於 `setSettings` 執行期由 `false` 改為 `true` **不會生效**，
       且會產生比不開更糟的狀態：插邊攔截立刻生效（純 View 層），但注入腳本未註冊、
       無人回報焦點位置，於是兩個執行者都不動作，輸入框被鍵盤完全遮住。
       成因：`addPluginScript` 在 `prepare()` 時依當下設定登記；重新載入只會重新注入
@@ -71,6 +80,8 @@
         故回報路徑得改走既有 JS bridge，退回原本刻意避開的 Dart 往返
       - B. 文件明確限定只能於 `initialSettings` 指定，`setSettings` 偵測到變更時記 warning。
         範圍最小、行為最誠實，代價是失去彈性
+
+</details>
 
 ## Phase D — 驗證
 - [ ] D1. 套件自帶 example 專案驗證開／關兩種設定

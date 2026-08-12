@@ -1149,8 +1149,20 @@ final public class InAppWebView extends InputAwareWebView implements InAppWebVie
     if (newSettingsMap.get("disableHorizontalScroll") != null && customSettings.disableHorizontalScroll != newCustomSettings.disableHorizontalScroll)
       setHorizontalScrollBarEnabled(!newCustomSettings.disableHorizontalScroll && newCustomSettings.horizontalScrollBarEnabled);
 
-    if (newSettingsMap.get("keyboardAvoidance") != null && customSettings.keyboardAvoidance != newCustomSettings.keyboardAvoidance)
-      setKeyboardAvoidanceEnabled(newCustomSettings.keyboardAvoidance);
+    if (newSettingsMap.get("keyboardAvoidance") != null && customSettings.keyboardAvoidance != newCustomSettings.keyboardAvoidance) {
+      if (newCustomSettings.keyboardAvoidance) {
+        // Refused rather than half-applied. The reporting script is registered during prepare(),
+        // and reloading only re-injects what the user content controller already holds, so it
+        // cannot recover a script that was never added. Applying just the inset interception
+        // would silence Chromium with nothing left to move the field into view -- worse than
+        // leaving the option off.
+        Log.w(LOG_TAG, "keyboardAvoidance can only be enabled through initialSettings; ignoring this runtime change.");
+      } else {
+        // Disabling is safe at any time: the listener goes away, the shift is reset, and the
+        // controller can no longer receive a keyboard height, so it computes a zero shift.
+        setKeyboardAvoidanceEnabled(false);
+      }
+    }
 
     if (newSettingsMap.get("overScrollMode") != null && !customSettings.overScrollMode.equals(newCustomSettings.overScrollMode))
       setOverScrollMode(newCustomSettings.overScrollMode);

@@ -32,6 +32,9 @@ public class KeyboardAvoidanceController {
   /** Bottom edge of the focused element in physical pixels, or {@link #NO_FOCUS}. */
   private float focusedBottomPx = NO_FOCUS;
 
+  /** Scratch buffer for {@link View#getLocationInWindow}; reused to keep this off the hot path. */
+  private final int[] locationInWindow = new int[2];
+
   public KeyboardAvoidanceController(@NonNull View webView) {
     this.webView = webView;
   }
@@ -95,16 +98,28 @@ public class KeyboardAvoidanceController {
     }
 
     final float marginPx = MARGIN_DP * webView.getResources().getDisplayMetrics().density;
-    // The element's position is measured against the untranslated view, so the visible area is
-    // simply the view height minus the keyboard.
-    final float visibleBottomPx = webView.getHeight() - keyboardHeightPx;
-    final float overlapPx = focusedBottomPx + marginPx - visibleBottomPx;
+
+    // Compared in window coordinates rather than inside the view, because the host may already
+    // have shrunk the WebView for the keyboard (Scaffold.resizeToAvoidBottomInset left at its
+    // default true). Measuring as `viewHeight - keyboardHeight` would then subtract the keyboard
+    // twice and overshoot -- reintroducing the doubled shift this option exists to remove. In
+    // window coordinates the shrink is already reflected in the view's own position and height,
+    // so both host configurations fall out of the same arithmetic.
+    webView.getLocationInWindow(locationInWindow);
+    // getLocationInWindow reports where the view is drawn, translation included. Backing it out
+    // gives a fixed reference, which keeps this idempotent -- recomputing without any change to
+    // the inputs must not walk the view further up each time.
+    final float untranslatedTopInWindow = locationInWindow[1] - webView.getTranslationY();
+    final float keyboardTopInWindow = webView.getRootView().getHeight() - keyboardHeightPx;
+
+    final float overlapPx =
+            untranslatedTopInWindow + focusedBottomPx + marginPx - keyboardTopInWindow;
     if (overlapPx <= 0f) {
       return 0f;
     }
 
-    // Shifting further than the keyboard height would expose the revealed strip above the
-    // keyboard's top edge, so the gap would become visible.
+    // Shifting further than the keyboard height would expose the strip revealed below the view's
+    // bottom edge above the keyboard's top edge, making the gap visible.
     return Math.min(overlapPx, keyboardHeightPx);
   }
 }

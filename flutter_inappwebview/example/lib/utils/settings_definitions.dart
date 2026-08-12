@@ -61,7 +61,7 @@ Map<String, List<SettingDefinition>> getSettingDefinitions() {
         name: 'Keyboard Avoidance',
         description: 'Keep the focused input visible when the keyboard opens',
         type: SettingType.boolean,
-        defaultValue: false,
+        defaultValue: true,
         property: InAppWebViewSettingsProperty.keyboardAvoidance,
       ),
       SettingDefinition(

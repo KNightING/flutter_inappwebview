@@ -62,6 +62,14 @@ public class KeyboardAvoidanceJS {
                     "  document.addEventListener('focusout', function(){ setTimeout(report, 0); }, true);" +
                     // The page can scroll the focused field out from under the shift we applied.
                     "  window.addEventListener('scroll', report, true);" +
+                    // A host that leaves Scaffold.resizeToAvoidBottomInset at its default shrinks
+                    // the WebView *after* focusin has already reported. Without re-reporting on
+                    // relayout the rect stays at its full-height value and the shift overshoots by
+                    // roughly the keyboard height.
+                    "  window.addEventListener('resize', report);" +
+                    "  if (window.visualViewport) {" +
+                    "    window.visualViewport.addEventListener('resize', report);" +
+                    "  }" +
                     "})();";
   }
 }

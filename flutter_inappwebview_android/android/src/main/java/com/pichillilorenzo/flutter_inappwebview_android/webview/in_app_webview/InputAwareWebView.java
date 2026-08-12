@@ -12,10 +12,14 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.widget.ListPopupWindow;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsAnimationCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import java.util.List;
 
 import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.KeyboardAvoidanceJS;
 
@@ -85,7 +89,9 @@ public class InputAwareWebView extends WebView {
     // merged into the system window insets, where they cannot be separated from the navigation
     // bar without guessing -- so the interception is not attempted there.
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-      Log.w(LOG_TAG, "keyboardAvoidance requires Android 11 (API 30) or above; ignoring.");
+      // Debug rather than warn: the option is on by default, so on older devices this would fire
+      // for every WebView about something the app never asked for and cannot act on.
+      Log.d(LOG_TAG, "keyboardAvoidance requires Android 11 (API 30) or above; not enabling.");
       return;
     }
 
@@ -107,6 +113,23 @@ public class InputAwareWebView extends WebView {
       // have to be handed to the WebView explicitly -- otherwise it sees no insets at all.
       return ViewCompat.onApplyWindowInsets(view, withoutIme);
     });
+
+    // onApplyWindowInsets only reports the settled value, so on its own the shift snaps into
+    // place and snaps back when the keyboard closes. This follows the IME animation frame by
+    // frame so the WebView travels with the keyboard instead.
+    ViewCompat.setWindowInsetsAnimationCallback(this,
+      new WindowInsetsAnimationCompat.Callback(WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+        @NonNull
+        @Override
+        public WindowInsetsCompat onProgress(@NonNull WindowInsetsCompat insets,
+                                             @NonNull List<WindowInsetsAnimationCompat> runningAnimations) {
+          if (keyboardAvoidanceController != null) {
+            keyboardAvoidanceController.setKeyboardHeightPx(
+              insets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+          }
+          return insets;
+        }
+      });
   }
 
   public void setContainerView(View containerView) {

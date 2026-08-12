@@ -1175,8 +1175,8 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   )
   bool? useHybridComposition;
 
-  ///Set to `true` to let the plugin keep the focused input element visible when the
-  ///soft keyboard opens. The default value is `false`.
+  ///Set to `false` to stop the plugin keeping the focused input element visible when the
+  ///soft keyboard opens. The default value is `true`.
   ///
   ///When enabled, the plugin consumes the IME window insets before they reach the
   ///WebView. That stops Chromium from running its own `ScrollFocusedEditableIntoView`,
@@ -1199,6 +1199,14 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///
   ///Requires Android 11 (API 30) or above, where IME insets are reported as a distinct
   ///inset type. Below that the option is ignored.
+  ///
+  ///**Can only be enabled through the initial settings.** Turning it on later through
+  ///`setSettings` is ignored and logs a warning. The script that reports the focused
+  ///element is registered while the WebView is being prepared, and reloading only
+  ///re-injects scripts that were already registered, so it cannot be added afterwards.
+  ///Applying only the inset interception would silence Chromium with nothing left to move
+  ///the field into view, which is worse than leaving the option off. Turning it *off* at
+  ///runtime does work and restores the original behaviour.
   ///
   ///**Affects `visualViewport` in the page.** Because the WebView never learns the keyboard
   ///is there, `window.visualViewport` keeps reporting the same `height` and `offsetTop`
@@ -3387,7 +3395,7 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
     this.regexToCancelSubFramesLoading,
     this.regexToAllowSyncUrlLoading,
     this.useHybridComposition = true,
-    this.keyboardAvoidance = false,
+    this.keyboardAvoidance = true,
     this.useShouldInterceptRequest,
     this.useOnRenderProcessGone,
     this.overScrollMode = OverScrollMode_.IF_CONTENT_SCROLLS,
