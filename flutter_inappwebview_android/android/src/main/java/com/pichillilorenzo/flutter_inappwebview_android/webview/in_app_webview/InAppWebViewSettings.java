@@ -131,6 +131,9 @@ public class InAppWebViewSettings implements ISettings<InAppWebViewInterface> {
   public Boolean useOnRenderProcessGone = false;
   public Boolean disableDefaultErrorPage = false;
   public Boolean useHybridComposition = true;
+  // Consume the IME window insets before they reach the WebView so Chromium does not run its own
+  // ScrollFocusedEditableIntoView, then perform the shift here instead.
+  public Boolean keyboardAvoidance = true;
   @Nullable
   public String verticalScrollbarThumbColor;
   @Nullable
@@ -420,6 +423,9 @@ public class InAppWebViewSettings implements ISettings<InAppWebViewInterface> {
         case "useHybridComposition":
           useHybridComposition = (Boolean) value;
           break;
+        case "keyboardAvoidance":
+          keyboardAvoidance = (Boolean) value;
+          break;
         case "verticalScrollbarThumbColor":
           verticalScrollbarThumbColor = (String) value;
           break;
@@ -575,6 +581,7 @@ public class InAppWebViewSettings implements ISettings<InAppWebViewInterface> {
     settings.put("useOnRenderProcessGone", useOnRenderProcessGone);
     settings.put("disableDefaultErrorPage", disableDefaultErrorPage);
     settings.put("useHybridComposition", useHybridComposition);
+    settings.put("keyboardAvoidance", keyboardAvoidance);
     settings.put("verticalScrollbarThumbColor", verticalScrollbarThumbColor);
     settings.put("verticalScrollbarTrackColor", verticalScrollbarTrackColor);
     settings.put("horizontalScrollbarThumbColor", horizontalScrollbarThumbColor);

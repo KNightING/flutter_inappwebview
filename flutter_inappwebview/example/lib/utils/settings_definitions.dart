@@ -58,6 +58,13 @@ Map<String, List<SettingDefinition>> getSettingDefinitions() {
     ],
     'Layout': [
       SettingDefinition(
+        name: 'Keyboard Avoidance',
+        description: 'Keep the focused input visible when the keyboard opens',
+        type: SettingType.boolean,
+        defaultValue: true,
+        property: InAppWebViewSettingsProperty.keyboardAvoidance,
+      ),
+      SettingDefinition(
         name: 'Use Wide ViewPort',
         description: 'Enable support for HTML viewport meta tag',
         type: SettingType.boolean,

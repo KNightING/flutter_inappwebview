@@ -12,7 +12,16 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.widget.ListPopupWindow;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsAnimationCompat;
+import androidx.core.view.WindowInsetsCompat;
+
+import java.util.List;
+
+import com.pichillilorenzo.flutter_inappwebview_android.plugin_scripts_js.KeyboardAvoidanceJS;
 
 /**
  * A WebView subclass that mirrors the same implementation hacks that the system WebView does in
@@ -29,6 +38,8 @@ public class InputAwareWebView extends WebView {
   private View threadedInputConnectionProxyView;
   private ThreadedInputConnectionProxyAdapterView proxyAdapterView;
   private boolean useHybridComposition = false;
+  @Nullable
+  private KeyboardAvoidanceController keyboardAvoidanceController;
 
   public InputAwareWebView(Context context, @Nullable View containerView, Boolean useHybridComposition) {
     super(context);
@@ -49,6 +60,76 @@ public class InputAwareWebView extends WebView {
   public InputAwareWebView(Context context, AttributeSet attrs, int defaultStyle) {
     super(context, attrs, defaultStyle);
     this.containerView = null;
+  }
+
+  /**
+   * Installs or removes the listener that hides the IME window insets from the system WebView.
+   *
+   * <p>Chromium reacts to IME insets by running its own {@code ScrollFocusedEditableIntoView},
+   * which translates the visual viewport. That makes it a second actor competing with any keyboard
+   * avoidance the app performs, and the two shifts add up before snapping back. Chromium's side
+   * lives inside the Android System WebView and cannot be changed, but it only triggers when this
+   * View actually receives IME insets -- which is what this intercepts.
+   *
+   * <p>Nothing is installed while disabled, so the WebView behaves exactly as it does upstream.
+   *
+   * @param enabled whether the IME insets should be hidden from the WebView
+   */
+  public void setKeyboardAvoidanceEnabled(boolean enabled) {
+    if (!enabled) {
+      ViewCompat.setOnApplyWindowInsetsListener(this, null);
+      if (keyboardAvoidanceController != null) {
+        keyboardAvoidanceController.reset();
+        keyboardAvoidanceController = null;
+      }
+      return;
+    }
+
+    // IME insets are only reported as a distinct type from API 30 (R). Below that they arrive
+    // merged into the system window insets, where they cannot be separated from the navigation
+    // bar without guessing -- so the interception is not attempted there.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      // Debug rather than warn: the option is on by default, so on older devices this would fire
+      // for every WebView about something the app never asked for and cannot act on.
+      Log.d(LOG_TAG, "keyboardAvoidance requires Android 11 (API 30) or above; not enabling.");
+      return;
+    }
+
+    keyboardAvoidanceController = new KeyboardAvoidanceController(this);
+    addJavascriptInterface(keyboardAvoidanceController, KeyboardAvoidanceJS.getInterfaceName());
+
+    ViewCompat.setOnApplyWindowInsetsListener(this, (view, insets) -> {
+      // Read the IME height before discarding it -- this is the only place it is available, and
+      // the WebView is about to be told the keyboard does not exist.
+      int imeHeightPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+      if (keyboardAvoidanceController != null) {
+        keyboardAvoidanceController.setKeyboardHeightPx(imeHeightPx);
+      }
+
+      WindowInsetsCompat withoutIme = new WindowInsetsCompat.Builder(insets)
+        .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
+        .build();
+      // The listener replaces the View's own onApplyWindowInsets, so the (modified) insets still
+      // have to be handed to the WebView explicitly -- otherwise it sees no insets at all.
+      return ViewCompat.onApplyWindowInsets(view, withoutIme);
+    });
+
+    // onApplyWindowInsets only reports the settled value, so on its own the shift snaps into
+    // place and snaps back when the keyboard closes. This follows the IME animation frame by
+    // frame so the WebView travels with the keyboard instead.
+    ViewCompat.setWindowInsetsAnimationCallback(this,
+      new WindowInsetsAnimationCompat.Callback(WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+        @NonNull
+        @Override
+        public WindowInsetsCompat onProgress(@NonNull WindowInsetsCompat insets,
+                                             @NonNull List<WindowInsetsAnimationCompat> runningAnimations) {
+          if (keyboardAvoidanceController != null) {
+            keyboardAvoidanceController.setKeyboardHeightPx(
+              insets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+          }
+          return insets;
+        }
+      });
   }
 
   public void setContainerView(View containerView) {
