@@ -99,11 +99,16 @@ public class InputAwareWebView extends WebView {
     addJavascriptInterface(keyboardAvoidanceController, KeyboardAvoidanceJS.getInterfaceName());
 
     ViewCompat.setOnApplyWindowInsetsListener(this, (view, insets) -> {
-      // Read the IME height before discarding it -- this is the only place it is available, and
-      // the WebView is about to be told the keyboard does not exist.
-      int imeHeightPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
-      if (keyboardAvoidanceController != null) {
-        keyboardAvoidanceController.setKeyboardHeightPx(imeHeightPx);
+      // The height is read from the root window insets, not from the insets dispatched here.
+      // By the time they reach this View the ancestors have already consumed part of them -- the
+      // two differ by the navigation bar (measured: dispatched 883 vs root 949 at density 2.75).
+      // The shift is computed in window coordinates, so it needs the window-level value; mixing
+      // the two left the field short by that difference, which was enough to hide it behind the
+      // keyboard whenever the required shift was not already near the keyboard height.
+      WindowInsetsCompat rootInsets = ViewCompat.getRootWindowInsets(view);
+      if (keyboardAvoidanceController != null && rootInsets != null) {
+        keyboardAvoidanceController.setKeyboardHeightPx(
+          rootInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
       }
 
       WindowInsetsCompat withoutIme = new WindowInsetsCompat.Builder(insets)
