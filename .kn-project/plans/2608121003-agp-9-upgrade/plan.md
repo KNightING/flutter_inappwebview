@@ -3,9 +3,17 @@
 
 - Created: 2026-08-12
 - Issue: N/A（無 issue 追蹤基準——本 repo 為 fork，GitHub Issues 已停用）
-- Branch: `feature/2608121003-agp-9-upgrade`（尚未建立）
-- Status: Planning
-- Completed: [Wait for Finish]
+- Branch: `feature/2608121003-agp-9-upgrade`
+- Status: Awaiting Archive
+- Completed: 2026-08-12
+
+> **結果：目標版本直接達成，Q2 的退版未觸發。**
+> AGP 8.13.2 → 9.3.0、Gradle 8.13 → 9.5.0，僅需移除一個在 AGP 9.0 被移除的選項
+> （`android.defaults.buildfeatures.buildconfig`），Kotlin 維持 2.2.20 未動。
+> 兩個 example 皆可建置、release 走完 R8／minify、實機執行無 FATAL。
+>
+> **唯一未結清項**：C5——`android.nonTransitiveRClass` 與 `android.nonFinalResIds` 刻意保留，
+> 因其為行為旗標而非語法，移除屬行為變更，超出本計畫宣告的範圍。
 
 ## Goals
 
@@ -103,23 +111,30 @@ Flutter 3.44.8 的模板用 2.3.20。AGP 9.x 對 Kotlin 版本有下限要求，
 沒有可建置的基準就無法歸因——升級後失敗到底來自 AGP 9.3、Gradle 9.5，還是本來就壞的 Jetifier，
 會分不清。這與該計畫 Phase O 停下來的理由相同。
 
-- [ ] A. 從軟鍵盤分支 cherry-pick `1c12f440f` 的 example 建置修復部分（建議）：
+- [ ] A. 從軟鍵盤分支 cherry-pick `1c12f440f` 的 example 建置修復部分：
   取得可建置基準，且不把軟鍵盤功能拉進來。代價是兩條分支各有一份相同修改，合併時需處理。
-- [ ] B. 先把軟鍵盤分支合併進 `main`，再從 `main` 切 AGP 分支：歷史最乾淨，但軟鍵盤計畫的
+- [x] B. 先把軟鍵盤分支合併進 `main`，再從 `main` 切 AGP 分支：歷史最乾淨，但軟鍵盤計畫的
   D 階段（掉幀量測、三條關閉路徑、轉向、內部捲動容器）尚未執行，現在合併等於跳過驗證。
 - [ ] C. 直接從軟鍵盤分支切出 AGP 分支：立即可用，但兩個計畫的變更會混在同一條線上，
   違反「只做工具鏈升級、不夾帶行為變更」的自我約束。
 
-狀態：⏳ 待確認
+狀態：✅ 已確認（2026-08-12 執行完畢）
+
+軟鍵盤分支已以 `--no-ff` 併入 `main`（merge commit `fd238abac`），本分支自新的 `main` 切出。
+**代價已實現且必須記住**：`main` 上現有一個預設開啟、Phase D 未驗證的功能。該計畫維持
+`In Progress` 未歸檔，其 `plan.md` 開頭已載明未完成清單。本計畫不承接那些驗證。
 
 ### Q2. AGP 9.3.0 若實測失敗，退到哪一版 — 影響：失敗時的處置
 目標超出 Flutter 驗證範圍，實測撞牆的可能性不低。
 
-- [ ] A. 退到 AGP 9.0.1 + Gradle 9.1.0（建議）：`flutter create` 產生的組合，已知可建置本套件。
+- [x] A. 退到 AGP 9.0.1 + Gradle 9.1.0：`flutter create` 產生的組合，已知可建置本套件。
 - [ ] B. 退到 AGP 9.1 + Gradle 9.3.1：Flutter `maxKnownAndSupported` 的上限。
 - [ ] C. 停下回報，不自行退版，由使用者決定。
 
-狀態：⏳ 待確認
+狀態：✅ 已確認
+
+退版是**授權的自動行為**，但仍須逐項回報實測結果與退版理由——不得只回報「已升級」而略過
+「目標版本失敗、實際落在 9.0.1」這件事。退版後也不再自行嘗試 B 或其他中間組合。
 
 ## Key Decisions
 
@@ -127,6 +142,10 @@ Flutter 3.44.8 的模板用 2.3.20。AGP 9.x 對 Kotlin 版本有下限要求，
   Flutter 驗證範圍三個小版本，使用者確認後採用。
 - **範圍含已棄用寫法清理**（來源：使用者於 2026-08-12 指定）。`lintOptions`、`minSdkVersion`、
   `compileSdkVersion`、`targetSdkVersion` 一併改為新寫法。
+- **先合併軟鍵盤分支再開始**（來源：Q1）。理由：本計畫需要可建置的 example 才能歸因，
+  而該修復只在該分支上。代價是 `main` 上多了一個未完成驗證的功能，已於該計畫記錄。
+- **失敗時自動退到 AGP 9.0.1 + Gradle 9.1.0**（來源：Q2）。理由：那是 `flutter create` 產生、
+  且已知能建置本套件的組合。退版須回報，不得隱含在「已升級」的結論裡。
 
 ## Git Completion Policy
 
