@@ -268,3 +268,44 @@ Commit 前逐項請示（Rule 17）。任務完成前將以 `git rebase main` �
   `.kn-project/plans/2608111504-webview-keyboard-avoidance/plan.md`
 - 使用端的實測紀錄：`sld-digital-lwd/upcc-middle-app` 的
   `.kn-project/plans/2608061146-p8-portrait-ux/plan.md`「迭代三」
+
+## 未解的架構問題 — 這個功能是否必要（2026-08-12）
+
+**`keyboardAvoidance` 從未與「使用端零介入、Chromium 獨演」比較過。**
+
+前身計畫的問題是**兩個執行者打架**：使用端自行平移 widget，Chromium 也平移 visual viewport。
+本計畫的解法是消掉 Chromium，讓套件成為唯一執行者。但**消掉使用端那個也能達到單一執行者**——
+Chromium 的 `ScrollFocusedEditableIntoView` 本就是為了讓焦點欄位可見而存在，單獨運作未必有問題。
+
+本計畫所有量測皆在 `avoid=true` 之下進行（D2 比的是 `resize` 的差異），
+**沒有任何一組是 `avoid=false` + 使用端不自行平移**。因此沒有證據顯示本功能優於「不裝它」。
+
+### 已知的差異（各有代價）
+
+| 面向 | `avoid=true`（套件平移） | `avoid=false`（Chromium 平移） |
+| :--- | :--- | :--- |
+| `visualViewport` | **不再回報鍵盤**，靠它偵測的網頁程式碼靜默失效 | 正常回報 |
+| 頁面捲動位置 | 不受影響 | **反覆開關鍵盤會漂移**（實測觀察） |
+| layout viewport | 不動，整個 WebView 平移 | 不動，只有 visual viewport 平移 |
+| `position:fixed` 元素 | 隨 WebView 一起移動 | 停留在 layout viewport |
+| 掉幀 | 未與對方比較過 | 未比較 |
+
+唯一實質差異是**頁面捲動位置漂移**——對表單頁面是真實困擾，可能足以支撐本功能存在，
+但那是單一意外觀察，非量測結果。
+
+### 為何未完成量測
+
+兩種產生「可比互動」的方法都失敗：
+
+- **固定座標點擊**：`avoid=false` 時頁面捲動漂移，點擊落空。實測兩組互動次數為 10 vs 4，
+  數字不可比（曾得到 0.38% vs 4.74%，**已作廢，不得引用**）。
+- **JS `element.focus()`**：Android WebView 上不會叫出輸入法（需真實使用者手勢），
+  5 輪跑完 `focusin` 為 0、僅渲染 47 幀，等於未測。
+
+可行方向是每輪先以 JS 查出欄位當下螢幕座標再據此點擊，但需改造探針且每輪需來回一次。
+使用者於 2026-08-12 決定**停止投入**，將問題記錄保留。
+
+### 若日後要重啟評估
+
+這是**架構問題，不是缺陷**——功能目前運作正常、無已知缺陷。若結論為「兩者相當」，
+拿掉本功能可同時消除：`visualViewport` 契約退步、C6 的執行期啟用缺口、以及約 300 行的上游 delta。
