@@ -45,8 +45,9 @@
       重驗通過。**此格是預設開啟後多數使用端會落在的狀態**，若未先補量即翻預設會是開箱即壞
 
 ## Phase B — 設定項
-- [x] B1. `platform_interface` 的 `in_app_webview_settings.dart` 宣告 `keyboardAvoidance`，
-      **預設 `false`**（`.g.dart` 已重新產生：欄位／建構子／fromMap／toMap／toString／支援查詢）
+- [x] B1. `platform_interface` 的 `in_app_webview_settings.dart` 宣告 `keyboardAvoidance`
+      （`.g.dart` 已重新產生：欄位／建構子／fromMap／toMap／toString／支援查詢）。
+      預設值最初為 `false`，2026-08-11 依使用者指示翻轉為 **`true`**（見 plan.md 的 Q3）
 - [x] B2. `InAppWebViewSettings.java` 欄位、`parse` 的 case、`toMap`
 - [x] B3. app-facing 透傳確認 → 設定走 map 序列化，`toMap`/`fromMap` 接通即生效，無額外透傳程式碼
 - [x] B4. 攔截受設定閘控——`setKeyboardAvoidanceEnabled(false)` 將監聽器設回 `null`，不安裝任何東西
