@@ -169,3 +169,110 @@
 依 Rule 8 應另開計畫。候選方向（皆待實測，未預設何者正確）：
 `ACTION_CANCEL` 時以 `flingScroll(0,0)` 中止；或記錄 `ACTION_DOWN` 捲動位置於 `CANCEL` 時還原；
 或僅對起始於系統手勢區的觸控特殊處理。
+
+## Phase F — iOS 對齊（2026-08-12 迭代，Q4 的「iOS 未排除」兌現）
+> Q5 決議 **C**：能力完整落在套件層，使用端未來零介入。Q6 決議 **A**：不納入對照量測。
+> **F1–F3 是閘門**：可行性未確認前不得寫實作程式碼（見 plan.md Q5 的 WARNING）。
+
+### F0 — 已知良好基準（比照 Phase O，不可省略）
+- [x] F0. 動任何程式碼前先建置並執行 `flutter_inappwebview/example` 的 iOS 版，確認基準可建置可執行；
+      若基準本來就壞，停下回報，不得在壞掉的基準上開發
+      → **基準良好**（2026-08-12，模擬器 iPad (A16) / iOS 26.4）。`flutter build ios --simulator --debug`
+      通過（Xcode build 66.1s），`simctl install` + `launch` 成功、WebView 載入 `flutter.dev`
+      （`onLoadStart` / `onNavigationResponse` 事件正常，PID 67086 存活）。
+      走**模擬器**而非實機：example 的 `DEVELOPMENT_TEAM` 是上游作者的 `PFP8UV45Y6`，
+      改成自有 team 會直接製造上游 delta，違反保留鐵則。實機驗證（F8）改由已簽章的
+      使用端 `nuxt-flutter-app` 承擔。
+      附帶：建置過程中 Flutter/CocoaPods 自動改寫 `example/ios/Flutter/AppFrameworkInfo.plist`
+      （移除 `MinimumOSVersion`）與 `example/ios/Runner.xcodeproj/project.pbxproj`
+      （移除 `[CP] Copy Pods Resources` 階段）共 21 行刪除，**已還原**，不納入 commit。
+
+### F1–F3 — 可行性調查（閘門）
+- [x] F1. 現況量測 → **完成**（模擬器 iPad (A16)）。收鍵盤後 `scrollY` 停在 204 而非 0，
+      焦點元素 752/801（原始 956/1005）。**症狀在不含 `useKeyboardAvoidance` 的純探針頁重現**，
+      故根因候選 2 不是必要條件。數據表見 plan.md「Phase F1/F2 實測結果」
+- [x] F2. WKWebView 焦點捲動的執行者 → **WebKit 會主動捲動**（`scrollY` 0→541，焦點元素
+      由 956/1005 移至 415/464 完整可見）。**iOS 與 Android 同構，確實存在第二個執行者**。
+      ⚠️ 前兩輪量到「WebKit 無作為」係因文件無捲動餘裕（`docHeight` ≤ 可視高度），
+      該結論已作廢；補 700px 尾部留白後結論相反
+- [x] F2b. 能否以公開 API 停用 WebKit 焦點捲動 → **不能**。無 `WKWebView` /
+      `WKWebViewConfiguration` 開關；`isScrollEnabled = false` 亦無效（RN issue #20793）。
+      壓制只剩 `WKContentView` 私有方法 + swizzling，使用端送審會被擋
+- [x] F3. **閘門 → 放行（改道）**：不走壓制，改走公開 API 補齊（Q7 決議 A）
+- [x] F2c. 第三輪複驗 → **漂移重現**（`scrollY` 559→265），且用的是不同收鍵盤路徑（`blur()`）。
+      同時推翻「WebKit 只還原 visual viewport 那一段」的結構性推論——第二輪吻合、第三輪差 43px，
+      該等式是巧合。穩固事實只有「收鍵盤後不回原點」
+- [ ] F3. **閘門**：F2 結論若為「只能靠私有 API 或 swizzling」→ 回 plan.md Q5 重新請示，
+      不得逕自落地；若有公開 API 路徑 → 記錄方案後續行
+
+### F4 以後 — 實作（Q7 決議 A：公開 API 補齊）
+- [x] F4. `in_app_webview_settings.dart:1227` 的 `@SupportedPlatforms` 加入 iOS，
+      並重新產生同目錄的 `.g.dart`；Dart 註解必須寫明**兩平台是不同機制**
+      （Android 壓制+平移；iOS 補齊 WebKit 缺的餘裕與還原）
+- [x] F5. `InAppWebViewSettings.swift` 加入 `keyboardAvoidance` 解析（比照 Android 端）
+- [x] F6. iOS 實作：`keyboardWillShow` 記住 `contentOffset`、給底部 `contentInset`
+      製造捲動餘裕（短頁面亦可揭露）；`keyboardWillHide` 還原兩者。
+      設定關閉時**完全不介入**，回到上游原行為（保留鐵則）
+- [x] F7. 修掉現有 `keyboardWillHide`（`InAppWebView.swift:144`）只重設旗標、
+      未還原 `contentInset` 的不對稱——該缺陷已確認存在，與設定開關無關
+- [x] F8. iOS 驗證：鍵盤彈出焦點欄位可見、收回後回到原位、反覆開關不漂移 → **通過（三輪）**
+      → **受阻（2026-08-12）**：模擬器上 example 只渲染出 WebView，AppBar／網址列／事件面板
+      全部沒畫出來（上下黑帶、中間一條白色網頁內容），無法用它的網址列導到探針頁。
+      **已證實與本計畫的改動無關**：`git stash` 掉全部套件改動後以純上游程式碼重建，
+      症狀完全相同；乾淨移除重裝亦相同，故非殘留狀態。臨時測試載具
+      （`resizeToAvoidBottomInset: false`）也已排除——單獨還原它症狀依舊，該載具已還原。
+      **後續更正（同日）**：所謂「版面問題」是**誤判**——使用者指出那是我點到 flutter.dev 的
+      影片進入原生全螢幕播放器，app chrome 一直都在。改把 example 預設網址指向探針頁後，
+      畫面完全正常。**此段誤判與先前的 stash 對照實驗無關，該實驗的結論（改動未造成回歸）仍成立。**
+
+      **真正的阻礙是宿主幾何**：example 的 WebView 是上下分割版面中的一塊面板
+      （實測高 320，拖曳分隔線後最多 624），而鍵盤蓋的是螢幕下緣——兩者幾乎不重疊，
+      `vvHeight` 全程不變，**沒有避讓行為可觀察**。本功能的真實情境是 WebView 全屏、
+      鍵盤直接蓋住它（即 `nuxt-flutter-app` 的形狀）。
+      結論：**example 不是這個功能的適當驗證宿主**。
+
+      → **改以使用端 `nuxt-flutter-app` 為宿主後通過**（2026-08-12，使用者改選 A）。
+      以臨時 `flutter-host/pubspec_overrides.yaml` 把三個 inappwebview 套件指向本機 fork
+      工作區（pub 原生的本機覆寫機制，優先於 `pubspec.yaml` 的 `dependency_overrides`；
+      三個必須一起列，未列出的會退回 pub.dev 版本），驗畢即刪除並重跑 `pub get`，
+      該 repo **無任何被追蹤檔案變更**。宿主幾何與 F1/F2 基準完全一致
+      （全屏 WebView、可視 1180、文件 1782、餘裕 602）。
+
+      **三輪結果完全一致、零漂移**：
+
+      | 輪次 | 焦點前 | 鍵盤彈出後 | 收鍵盤後 |
+      | :--- | ---: | ---: | ---: |
+      | 1 | 0 | 559（焦點元素 397/446 可見） | **0**（元素回 956/1005） |
+      | 2 | 0 | 559 | **0** |
+      | 3 | 0 | 559 | **0** |
+
+      對照修正前同一宿主同一探針：收回後殘留 **265**、元素停在 691/740。
+      **彈出階段數值完全未變（559），證實修正只加上還原、未干擾 WebKit 的揭露行為。**
+- [x] F9. 副作用檢查（比照 A3）：`<select>` 下拉、游標／選取把手、選字浮動工具列位置正確 → **通過（第二版閘門）**
+      → **抓到缺陷（2026-08-12，模擬器 iPad (A16)）**：鍵盤開啟時點 `<select>`，
+      鍵盤收起觸發我們的還原（`scrollY` 559→0），但**原生下拉浮層停在捲動前的位置**，
+      與 `<select>` 元素本體錯開約 450pt。
+
+      **根因是規則過寬，不是實作瑕疵**：`restoreContentOffsetAfterKeyboard()` 在
+      **任何** `keyboardWillHide` 都還原，包含「焦點移到另一個非文字元素」這種情況。
+      此時把頁面拉回等於把使用者正在互動的元素移走，原生浮層的錨點也跟著失效。
+
+      待決方向（見 plan.md 的 Q8）：
+      (a) 還原改為非動畫（`animated: false`），賭浮層在捲動後才定位——**未驗證，可能只是遮住症狀**；
+      (b) 延後一個 runloop 再還原，期間若有新的 focus／`keyboardWillShow` 就取消還原；
+      (c) 僅在「WebView 不再是 first responder」時還原。
+      **在此停下請示，不自行選定**（呼應 Phase 3 步驟 2 的「執行中冒出新的不確定須回填 Open Questions」）
+- [x] F9c. **使用者於 2026-08-13 指出跨週期的錨點繼承缺陷，已修正並驗證**。
+      序列：開鍵盤（捕捉 0、WebKit 捲到 559）→ 點 `<select>`（不還原）→ 再開鍵盤 → 收鍵盤，
+      **會還原到 559 之前的 0**，也就是兩次互動前的位置。
+      成因是兩段邏輯的交互：捕捉「每週期只做一次」，而跳過還原時我**刻意保留**了捕捉值
+      （原註解還把它寫成有意為之），於是下一個週期繼承了過期的錨點。
+      修正：跳過還原時**清除**捕捉值，確立不變式「一個位置只能被捕捉它的那個週期還原」。
+      重驗四步序列：0→559→（select 不動）559→（再開鍵盤）559→**收鍵盤仍為 559**，正確。
+      另補跑單獨的乾淨週期：0→559→**收鍵盤回 0**，無回歸
+- [x] F9b. 缺陷修正後重跑 F8 三輪 → **全數歸位**（559→0、559→0、559→0），無回歸。
+      F9 同時通過：鍵盤開啟時點 `<select>`，`scrollY` 維持 559 不還原，
+      下拉浮層正確錨在元素正上方（修正前錯開約 450pt）
+- [ ] F10. 確認 Android 行為零回歸（本迭代不應動到 Android 路徑）
+- [ ] F11. 文件：更新 `keyboardAvoidance` 的 Dart 註解（平台支援、iOS 的 `visualViewport` 契約影響）
+- [ ] F12. `git diff upstream/master` 確認 iOS delta 未逸出計畫（併入 E1 檢查）
