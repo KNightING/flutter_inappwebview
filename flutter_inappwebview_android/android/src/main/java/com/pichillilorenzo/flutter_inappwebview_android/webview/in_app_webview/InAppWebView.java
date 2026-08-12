@@ -62,6 +62,9 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -119,6 +122,17 @@ import io.flutter.plugin.common.MethodChannel;
 
 final public class InAppWebView extends InputAwareWebView implements InAppWebViewInterface {
   private static final String LOG_TAG = "InAppWebView";
+
+  /**
+   * Single-event displacement, in dp, above which a move inside an edge-started gesture is taken
+   * to be the system's injected cancel artefact rather than the finger. See
+   * {@link #shouldDropSystemGestureArtefact}.
+   */
+  private static final float GESTURE_ARTEFACT_THRESHOLD_DP = 48f;
+
+  private boolean gestureStartedInSystemGestureArea = false;
+  private float lastGestureX;
+  private float lastGestureY;
   public static final String METHOD_CHANNEL_NAME_PREFIX = "com.pichillilorenzo/flutter_inappwebview_";
 
   @Nullable
@@ -1587,6 +1601,10 @@ final public class InAppWebView extends InputAwareWebView implements InAppWebVie
       return true;
     }
 
+    if (shouldDropSystemGestureArtefact(ev)) {
+      return true;
+    }
+
     lastTouch = new Point((int) ev.getX(), (int) ev.getY());
 
     ViewParent parent = getParent();
@@ -1598,6 +1616,66 @@ final public class InAppWebView extends InputAwareWebView implements InAppWebVie
     }
 
     return super.onTouchEvent(ev);
+  }
+
+  /**
+   * Whether this event is the displaced {@code ACTION_MOVE} the system injects when it takes a
+   * back gesture over from the app, which Chromium would otherwise apply as a real scroll.
+   *
+   * <p>When the system claims an edge swipe it sends a synthetic {@code ACTION_MOVE} carrying a
+   * position far from the finger, immediately followed by {@code ACTION_CANCEL} with the same
+   * event time. That pattern exists so views using slop-based detection give up. Chromium instead
+   * scrolls by the displacement, and the {@code ACTION_CANCEL} that follows does not undo it -- so
+   * the page jumps every time the user swipes back over the WebView.
+   *
+   * <p>Measured on a 1080x2400 / density 2.75 device: real moves within such a gesture displace at
+   * most 16px, the injected one 268-269px. {@link #GESTURE_ARTEFACT_THRESHOLD_DP} sits between the
+   * two, and the check only runs for gestures that began inside the system gesture insets, so a
+   * fast flick anywhere else is untouched. Dropping one event is safe regardless: later events
+   * carry absolute positions, so nothing accumulates.
+   */
+  private boolean shouldDropSystemGestureArtefact(MotionEvent ev) {
+    switch (ev.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN:
+        gestureStartedInSystemGestureArea = isInsideSystemGestureArea(ev.getX());
+        lastGestureX = ev.getX();
+        lastGestureY = ev.getY();
+        return false;
+      case MotionEvent.ACTION_MOVE:
+        if (!gestureStartedInSystemGestureArea) {
+          return false;
+        }
+        final float thresholdPx =
+                GESTURE_ARTEFACT_THRESHOLD_DP * getResources().getDisplayMetrics().density;
+        final boolean displaced =
+                Math.abs(ev.getX() - lastGestureX) > thresholdPx
+                        || Math.abs(ev.getY() - lastGestureY) > thresholdPx;
+        if (displaced) {
+          // Deliberately not updating the last position: the injected event never happened as far
+          // as this gesture is concerned.
+          return true;
+        }
+        lastGestureX = ev.getX();
+        lastGestureY = ev.getY();
+        return false;
+      default:
+        gestureStartedInSystemGestureArea = false;
+        return false;
+    }
+  }
+
+  /** Whether {@code x} falls in the left or right strip reserved for system gestures. */
+  private boolean isInsideSystemGestureArea(float x) {
+    // Gesture navigation arrived in API 29; below that there is no such strip and nothing to guard.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+      return false;
+    }
+    final WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
+    if (insets == null) {
+      return false;
+    }
+    final Insets gestureInsets = insets.getInsets(WindowInsetsCompat.Type.systemGestures());
+    return x <= gestureInsets.left || x >= getWidth() - gestureInsets.right;
   }
 
   @Override
