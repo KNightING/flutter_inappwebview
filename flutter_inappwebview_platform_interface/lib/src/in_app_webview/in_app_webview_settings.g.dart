@@ -1315,8 +1315,18 @@ class InAppWebViewSettings {
   ///Those numbers cover the Flutter layer only; under hybrid composition the WebView renders
   ///into its own surface, which `gfxinfo` does not measure.
   ///
-  ///When `false` the plugin does not install the insets listener at all, so behaviour is
-  ///identical to not having this option.
+  ///**Only pair it with `false` on the OS versions where this option actually takes effect
+  ///(see the version requirements below).** Below them the plugin does nothing at all, so an
+  ///unconditional `resizeToAvoidBottomInset: false` leaves *no* actor performing avoidance:
+  ///the framework has been told to stand down and the plugin never stood up. The focused
+  ///field is then simply covered by the keyboard -- a worse outcome than not using this
+  ///option at all, and a silent one. Nothing throws, and the only trace is a `Log.d` on
+  ///Android that many ROMs filter out. If the app supports Android 10 or below, or iOS 17.1
+  ///or below, either leave `resizeToAvoidBottomInset` at its default `true` there or set it
+  ///from the OS version.
+  ///
+  ///When this option is `false` the plugin does not install the insets listener at all, so
+  ///behaviour is identical to not having this option.
   ///
   ///Requires Android 11 (API 30) or above, where IME insets are reported as a distinct
   ///inset type. Below that the option is ignored. On iOS it requires 17.2 or above, which
