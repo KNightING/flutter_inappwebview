@@ -22,10 +22,29 @@ fork 的目的不是追隨或改造上游，而是**把使用端反覆重造的�
 - **不發佈 pub.dev**：使用端一律以 `git:` + `path:` 依賴引用。若有 transitive 依賴從 pub.dev
   拉 `flutter_inappwebview`，使用端需以 `dependency_overrides` 收斂。
 - **PR 一律指向 `KNightING/flutter_inappwebview`**：本 repo 是 GitHub 上 `pichillilorenzo` 的
-  正式 fork，`gh pr create` 預設會指向 parent。已執行 `gh repo set-default KNightING/flutter_inappwebview`
-  收斂，但每次開 PR 前仍應確認目標 repo，誤射會把變更送進他人的公開 repo。
-- **上游同步**：`upstream` remote 已接上 `pichillilorenzo/flutter_inappwebview`。注意
-  **上游主幹為 `master`，本 fork 為 `main`**，同步時分支名不同。
+  正式 fork，`gh pr create` **預設會指向 parent**——誤射會把變更送進他人的公開 repo。
+  每次開 PR 前仍應確認目標 repo。
+
+## 每台開發機首次 clone 後必做
+
+下列設定都存於**該 clone 的 `.git/config`**，不隨 GitHub 帳號、也不隨 repo 傳遞。
+在別台機器設過**不算數**，新機器一律要重做一次；兩項皆曾因此在實際作業中失效。
+
+- [ ] **收斂 `gh` 的 PR 目標**，否則 `gh pr create` 會指向上游 parent：
+
+  ```bash
+  gh repo set-default KNightING/flutter_inappwebview
+  ```
+
+  驗證：`gh repo set-default --view` 應回報 `KNightING/flutter_inappwebview`。
+
+- [ ] **接上 `upstream` remote**，否則任何 `git diff upstream/master` 的 delta 檢查會直接失敗：
+
+  ```bash
+  git remote add upstream https://github.com/pichillilorenzo/flutter_inappwebview.git && git fetch upstream
+  ```
+
+  注意 **上游主幹為 `master`，本 fork 為 `main`**，同步時分支名不同。
 
 ## Architecture
 
