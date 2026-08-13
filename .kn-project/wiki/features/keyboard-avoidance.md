@@ -7,12 +7,13 @@
 軟鍵盤彈出時讓焦點輸入框保持可見，由套件內部完成，使用端零程式碼。設定項為
 `InAppWebViewSettings.keyboardAvoidance`，**預設開啟**，支援 Android 與 iOS。
 **兩平台是兩套不同機制**：Android 壓制 Chromium 後自行平移 WebView，iOS 不壓制 WebKit、
-只補它缺的捲動餘裕與收鍵盤後的位置還原。使用端仍須自行宣告
-`Scaffold.resizeToAvoidBottomInset: false`。
+只補它缺的捲動餘裕與收鍵盤後的位置還原。使用端唯一要做的事是宣告
+`Scaffold.resizeToAvoidBottomInset: false`，但**僅限本功能實際生效的 OS 版本**
+（Android 11 / iOS 17.2 以上），否則會變成兩邊都不避讓。
 
 ## 使用端要做的事
 
-只有一件——關掉 Flutter 的 resize：
+只有一件——在**支援的 OS 版本上**關掉 Flutter 的 resize：
 
 ```dart
 Scaffold(
@@ -30,7 +31,15 @@ Android 實測（1080x2400、五個鍵盤週期，僅涵蓋 Flutter 層）：
 | `Scaffold` resize | janky frames | 95th percentile |
 | :--- | ---: | ---: |
 | `true`（Flutter 預設） | 4.41% | 19ms |
-| `false`（建議） | **0.00%** | **10ms** |
+| `false`（支援版本上建議） | **0.00%** | **10ms** |
+
+> [!CAUTION]
+> **App 支援 Android 10 以下或 iOS 17.1 以下時，不得無條件設為 `false`。**
+> 那些版本上套件完全不介入（見「已知限制」），`false` 等於同時關掉唯一還在運作的避讓者：
+> framework 被要求收手、套件沒站起來，焦點欄位直接被鍵盤蓋住。
+>
+> 這個失效是**靜默的**——不擲例外，唯一線索是 Android 端的 `Log.d`，而該層級常被 ROM 濾掉
+> （實測於 Android 10 裝置完全看不到）。請保留預設 `true`，或依 OS 版本條件式設定。
 
 除此之外，使用端**不需要**自行平移 WebView、不需要自建焦點位置回報橋接、
 也不需要 `interactive-widget=overlays-content` 這類 viewport meta。
@@ -109,13 +118,17 @@ flowchart TD
 - **Android 只能於 `initialSettings` 啟用**。注入腳本在 `prepare()` 時登記，重載只重新注入
   已登記者，事後補不回來；只套用插邊攔截會消音 Chromium 卻無人接手位移，比不開更糟，
   故 `setSettings` 偵測到 `false → true` 時記 warning 並**拒絕套用**。關閉方向不受限。
-- **Android API 30 以下忽略此選項**（記 `Log.d`，不佯裝有效）。IME 插邊自 API 30 才是獨立的
-  inset type，更早版本與導航列混在一起，硬拆等於猜測。
+- **Android API 30 以下、iOS 17.2 以下忽略此選項**（Android 記 `Log.d`，不佯裝有效）。
+  Android 的理由：IME 插邊自 API 30 才是獨立的 inset type，更早版本與導航列混在一起，
+  硬拆等於猜測。**這些版本上使用端必須讓 `Scaffold.resizeToAvoidBottomInset` 維持 `true`**，
+  否則沒有任何一方在避讓（見上方「使用端要做的事」的警告）。
 - **autofill 建議下拉未驗證**——測試裝置無 autofill 資料，無候選即無下拉。
 
 ## References
 
-- 歸檔計畫：[2608111609-webview-keyboard-avoidance](../../archive/2608111609-webview-keyboard-avoidance.md)
+- 歸檔計畫：[2608111609-webview-keyboard-avoidance](../../archive/2608111609-webview-keyboard-avoidance.md)、
+  [2608132314-keyboard-avoidance-unsupported-os-doc](../../archive/2608132314-keyboard-avoidance-unsupported-os-doc.md)
+  （不支援 OS 版本上的 `resizeToAvoidBottomInset` 條件）
 - 上游 issue #1947（iOS `contentInset` 修正的來源）：`https://github.com/pichillilorenzo/flutter_inappwebview/issues/1947`
 
 ---
