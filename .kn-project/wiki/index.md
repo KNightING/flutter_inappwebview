@@ -4,7 +4,7 @@
 
 ## 功能索引
 
-（尚無節點——首個計畫歸檔時建立。）
+- [軟鍵盤避讓（keyboardAvoidance）](features/keyboard-avoidance.md)
 
 ---
 
