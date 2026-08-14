@@ -75,6 +75,9 @@ Federated plugin，一份 app-facing 套件 + 各平台實作 + 共用介面：
 
 - AGP 8.13.1；`compileSdk` 取 `flutter.compileSdkVersion`（跟隨 Flutter SDK，非硬寫）；`minSdkVersion 19`。
 - iOS / macOS **同時**提供 `Package.swift`（SPM）與 `.podspec`（CocoaPods），兩者並存。
+- macOS 部署目標 **10.15**（SPM 與 podspec 一致）。2026-08 由上游的 10.14 升上來，因新版 Xcode
+  對 `ASWebAuthentication` 的可用性檢查會令 10.14 直接建置失敗——**勿降回**（詳見
+  `archive/2608140054-macos-spm-deployment-target.md`）。
 - AGP 9.0 尚未導入——若後續 Flutter SDK 要求，需自行升級。
 
 ### JS 橋接名稱
