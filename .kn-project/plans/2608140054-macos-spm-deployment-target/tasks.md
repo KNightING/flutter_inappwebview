@@ -6,4 +6,4 @@
 - [x] Phase 3：依 Q1 決議修改 `.podspec`（10.14 → 10.15）
 - [x] Phase 4：`flutter build macos --debug` 建置成功
 - [x] Phase 4：啟動 example app（`flutter run -d macos`）並實際操作 WebView 驗證（載入 flutter.dev、導航 example.com、事件面板記錄 onLoadStop/onTitleChanged）
-- [ ] Phase 4：經核准的 commit 後執行 rebase + `--force-with-lease --force-if-includes` 更新遠端
+- [x] Phase 4：經核准的 commit 後執行 rebase + `--force-with-lease --force-if-includes` 更新遠端（commit `aba8e17e8`，rebase 為 no-op）

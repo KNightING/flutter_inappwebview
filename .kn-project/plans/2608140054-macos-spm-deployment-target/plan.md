@@ -3,7 +3,7 @@
 - Created: 2026-08-14
 - Branch: fix/2608140054-macos-spm-deployment-target
 - Issue: KNightING/flutter_inappwebview#6
-- Status: In Progress
+- Status: Awaiting Archive
 - Completed: [Wait for Finish]
 
 ## Goals
