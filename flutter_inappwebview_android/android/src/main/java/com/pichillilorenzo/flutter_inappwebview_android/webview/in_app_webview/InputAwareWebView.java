@@ -88,10 +88,12 @@ public class InputAwareWebView extends WebView {
     // IME insets are only reported as a distinct type from API 30 (R). Below that they arrive
     // merged into the system window insets, where they cannot be separated from the navigation
     // bar without guessing -- so the interception is not attempted there.
+    // Below API 30 the shift still runs, but its two inputs come from elsewhere -- see
+    // [setFrameworkKeyboardInsetPx] for where the keyboard height comes from and why nothing is
+    // consumed here.
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-      // Debug rather than warn: the option is on by default, so on older devices this would fire
-      // for every WebView about something the app never asked for and cannot act on.
-      Log.d(LOG_TAG, "keyboardAvoidance requires Android 11 (API 30) or above; not enabling.");
+      keyboardAvoidanceController = new KeyboardAvoidanceController(this);
+      addJavascriptInterface(keyboardAvoidanceController, KeyboardAvoidanceJS.getInterfaceName());
       return;
     }
 
@@ -135,6 +137,36 @@ public class InputAwareWebView extends WebView {
           return insets;
         }
       });
+  }
+
+  /**
+   * Feeds the keyboard height measured by the Flutter framework, for the API levels where this
+   * View cannot measure it itself.
+   *
+   * <p>Below API 30 there is no channel here that reports the IME. The type-based insets carry no
+   * {@code ime()} value at all, and the window insets that do arrive are consumed by the Flutter
+   * embedding before reaching this View -- measured on API 29, both the system-window and stable
+   * bottoms stay 0 for the whole keyboard cycle. The visible display frame does move, but reading
+   * it needs a layout pass, and with {@code Scaffold.resizeToAvoidBottomInset: false} nothing in
+   * the view tree relayouts, so the observer never fires.
+   *
+   * <p>The engine, on the other hand, has the value: that is what makes the framework's own resize
+   * work on those versions. So the Dart side of this package observes it and pushes it down here.
+   *
+   * <p>Nothing is consumed on this path, and none is needed: unlike API 30+, Chromium does not act
+   * on the keyboard here -- verified on API 29 by pointing an app with a long, non-reflowing page
+   * at it with the framework resize off, where the focused field stayed covered and the page never
+   * moved. There is therefore no second actor to suppress, only the shift to perform.
+   *
+   * @param heightPx height of the keyboard in physical pixels, 0 when it is closed
+   */
+  public void setFrameworkKeyboardInsetPx(int heightPx) {
+    // API 30+ measures the IME itself, frame by frame, from a source that cannot lag behind the
+    // animation. Accepting the framework's value there would mean two writers for one field.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || keyboardAvoidanceController == null) {
+      return;
+    }
+    keyboardAvoidanceController.setKeyboardHeightPx(heightPx);
   }
 
   public void setContainerView(View containerView) {

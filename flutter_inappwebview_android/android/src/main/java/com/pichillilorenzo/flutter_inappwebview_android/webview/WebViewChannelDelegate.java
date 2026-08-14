@@ -727,6 +727,16 @@ public class WebViewChannelDelegate extends ChannelDelegateImpl {
           result.success(false);
         }
         break;
+      case setFrameworkKeyboardInset:
+        // Only InAppWebView performs keyboard avoidance; the other InAppWebViewInterface
+        // implementations have no view to shift, so this is a no-op for them rather than a method
+        // every one of them would have to carry.
+        if (webView instanceof InAppWebView) {
+          Integer heightPx = (Integer) call.argument("height");
+          ((InAppWebView) webView).setFrameworkKeyboardInsetPx(heightPx != null ? heightPx : 0);
+        }
+        result.success(true);
+        break;
     }
   }
 

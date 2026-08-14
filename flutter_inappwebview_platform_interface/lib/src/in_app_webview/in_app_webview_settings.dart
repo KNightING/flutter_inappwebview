@@ -1220,22 +1220,28 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///Those numbers cover the Flutter layer only; under hybrid composition the WebView renders
   ///into its own surface, which `gfxinfo` does not measure.
   ///
-  ///**Only pair it with `false` on the OS versions where this option actually takes effect
-  ///(see the version requirements below).** Below them the plugin does nothing at all, so an
-  ///unconditional `resizeToAvoidBottomInset: false` leaves *no* actor performing avoidance:
-  ///the framework has been told to stand down and the plugin never stood up. The focused
-  ///field is then simply covered by the keyboard -- a worse outcome than not using this
-  ///option at all, and a silent one. Nothing throws, and the only trace is a `Log.d` on
-  ///Android that many ROMs filter out. If the app supports Android 10 or below, or iOS 17.1
-  ///or below, either leave `resizeToAvoidBottomInset` at its default `true` there or set it
-  ///from the OS version.
+  ///**On iOS, only pair it with `false` from 17.2 up (see the version requirements below).**
+  ///Below that the plugin does nothing there, so an unconditional
+  ///`resizeToAvoidBottomInset: false` leaves *no* actor performing avoidance: the framework
+  ///has been told to stand down and the plugin never stood up. The focused field is then
+  ///simply covered by the keyboard -- a worse outcome than not using this option at all, and
+  ///a silent one, since nothing throws. Either leave `resizeToAvoidBottomInset` at its
+  ///default `true` on those versions or set it from the OS version. Android carries no such
+  ///caveat: the option works on every version the plugin supports.
   ///
   ///When this option is `false` the plugin does not install the insets listener at all, so
   ///behaviour is identical to not having this option.
   ///
-  ///Requires Android 11 (API 30) or above, where IME insets are reported as a distinct
-  ///inset type. Below that the option is ignored. On iOS it requires 17.2 or above, which
-  ///is where the plugin observes the keyboard notifications this option builds on.
+  ///On Android it works on every supported version, but through two different mechanisms.
+  ///From API 30 the keyboard height is read from the distinct IME inset type, frame by frame
+  ///through the insets animation. Below that no such type exists, and the window insets that
+  ///would carry it are consumed by the Flutter embedding before reaching the WebView, so the
+  ///height comes from the framework instead -- the Dart side of the plugin observes
+  ///`didChangeMetrics` and forwards `FlutterView.viewInsets.bottom`, which also fires per
+  ///frame. The other half of the mechanism differs as well: below API 30 Chromium does not
+  ///react to the keyboard, so nothing is suppressed and the plugin only performs the shift.
+  ///On iOS it requires 17.2 or above, which is where the plugin observes the keyboard
+  ///notifications this option builds on.
   ///
   ///**Android only -- can only be enabled through the initial settings.** Turning it on
   ///later through `setSettings` is ignored and logs a warning. The script that reports the
@@ -1245,13 +1251,16 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///the field into view, which is worse than leaving the option off. Turning it *off* at
   ///runtime does work and restores the original behaviour.
   ///
-  ///**Android only -- affects `visualViewport` in the page.** Because the WebView never
-  ///learns the keyboard is there, `window.visualViewport` keeps reporting the same
-  ///`height` and `offsetTop` while the keyboard is open. Page code that detects the
-  ///keyboard by watching `visualViewport` shrink will silently stop detecting it -- no
-  ///error, it simply never fires. Native text selection handles, the selection toolbar
-  ///and `<select>` popups are unaffected: the system positions those from the real IME
-  ///state, not from the insets delivered to this View.
+  ///**Android only -- affects `visualViewport` in the page.** The WebView is never told the
+  ///keyboard is there: from API 30 because the plugin consumes the IME insets, and below
+  ///that because they do not reach it in the first place (measured on API 29, the system
+  ///window and stable bottoms both stay 0 for the whole keyboard cycle). Either way,
+  ///`window.visualViewport` keeps reporting the same `height` and `offsetTop` while the
+  ///keyboard is open. Page code that detects the keyboard by watching `visualViewport`
+  ///shrink will silently stop detecting it -- no error, it simply never fires. Native text
+  ///selection handles, the selection toolbar and `<select>` popups are unaffected: the
+  ///system positions those from the real IME state, not from the insets delivered to this
+  ///View.
   @SupportedPlatforms(platforms: [AndroidPlatform(), IOSPlatform()])
   bool? keyboardAvoidance;
 
