@@ -53,3 +53,13 @@
 版本閘的實作位置（未變更，供日後查閱）：
 `flutter_inappwebview_android/android/src/main/java/com/pichillilorenzo/flutter_inappwebview_android/webview/in_app_webview/InputAwareWebView.java:91`
 —— `Build.VERSION.SDK_INT < Build.VERSION_CODES.R` 時記 `Log.d` 後早退，不安裝監聽器。
+
+---
+
+> [!IMPORTANT]
+> **本檔記載的 Android 限制已於 2026-08-14 解除。** 當時的結論「API 30 以下套件完全不介入，
+> 使用端必須讓 `resizeToAvoidBottomInset` 維持 `true`」在計畫
+> [2608140927-keyboard-avoidance-pre-r](2608140927-keyboard-avoidance-pre-r.md) 中被實作推翻：
+> 該區間改由 Dart 層轉交 framework 的鍵盤高度，套件同樣執行平移，且無須壓制 Chromium。
+> 本檔的敘述保留為當時的歷史紀錄，**現行行為以 wiki 的
+> [keyboard-avoidance](../wiki/features/keyboard-avoidance.md) 為準**。iOS 17.1 以下的限制不受影響，仍然成立。

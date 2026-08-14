@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_platform_interface.dart';
 
 import '../in_app_browser/in_app_browser.dart';
@@ -3203,8 +3204,59 @@ class AndroidInAppWebViewController extends PlatformInAppWebViewController
     return id;
   }
 
+  /// Observer feeding the framework's keyboard inset to the native side; null while not reporting.
+  _FrameworkKeyboardInsetObserver? _keyboardInsetObserver;
+
+  /// Last value handed to the native side, to skip the channel hop when nothing moved.
+  int _lastFrameworkKeyboardInset = -1;
+
+  /// Starts forwarding the framework's keyboard inset to the native side.
+  ///
+  /// Needed only below API 30, where the native side has no channel of its own that reports the
+  /// IME (see `InputAwareWebView.setFrameworkKeyboardInsetPx`). Starting it on newer versions is
+  /// harmless -- the native side ignores the value there -- so the caller does not have to query
+  /// the OS version just to decide whether to observe.
+  void startFrameworkKeyboardInsetReporting() {
+    if (_keyboardInsetObserver != null) {
+      return;
+    }
+    final observer = _FrameworkKeyboardInsetObserver(_reportFrameworkKeyboardInset);
+    _keyboardInsetObserver = observer;
+    WidgetsBinding.instance.addObserver(observer);
+    // The keyboard can already be up when a WebView is mounted (navigating between pages while
+    // typing); without this the shift would wait for the next metrics change to catch up.
+    _reportFrameworkKeyboardInset();
+  }
+
+  void stopFrameworkKeyboardInsetReporting() {
+    final observer = _keyboardInsetObserver;
+    if (observer == null) {
+      return;
+    }
+    WidgetsBinding.instance.removeObserver(observer);
+    _keyboardInsetObserver = null;
+    _lastFrameworkKeyboardInset = -1;
+  }
+
+  void _reportFrameworkKeyboardInset() {
+    // viewInsets is already in physical pixels, which is what the native controller works in --
+    // deliberately not routed through MediaQuery, which would need a BuildContext and hand back
+    // logical pixels to convert again.
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (view == null) {
+      return;
+    }
+    final inset = view.viewInsets.bottom.round();
+    if (inset == _lastFrameworkKeyboardInset) {
+      return;
+    }
+    _lastFrameworkKeyboardInset = inset;
+    channel?.invokeMethod('setFrameworkKeyboardInset', {'height': inset});
+  }
+
   @override
   void dispose({bool isKeepAlive = false}) {
+    stopFrameworkKeyboardInsetReporting();
     disposeChannel(removeMethodCallHandler: !isKeepAlive);
     _inAppBrowser = null;
     webStorage.dispose();
@@ -3228,4 +3280,19 @@ class AndroidInAppWebViewController extends PlatformInAppWebViewController
 
 extension InternalInAppWebViewController on AndroidInAppWebViewController {
   get handleMethod => _handleMethod;
+}
+
+/// Relays `didChangeMetrics` to the controller.
+///
+/// `didChangeMetrics` fires on every frame of the IME animation, so the shift follows the keyboard
+/// rather than snapping into place once it settles.
+class _FrameworkKeyboardInsetObserver with WidgetsBindingObserver {
+  _FrameworkKeyboardInsetObserver(this._onMetricsChanged);
+
+  final VoidCallback _onMetricsChanged;
+
+  @override
+  void didChangeMetrics() {
+    _onMetricsChanged();
+  }
 }

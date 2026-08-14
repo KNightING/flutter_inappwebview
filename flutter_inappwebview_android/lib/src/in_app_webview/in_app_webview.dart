@@ -413,6 +413,19 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
         webviewParams: params,
       ),
     );
+    // keyboardAvoidance defaults to true, so an absent setting still means enabled. Below API 30
+    // the native side depends on this reporting for the keyboard height; above it the value is
+    // ignored, so no OS version check is needed here.
+    //
+    // Read through the map rather than the getter: this package depends on the published
+    // platform interface (see pubspec.yaml), which does not carry this fork's settings, so the
+    // typed access would not analyze even though it resolves fine for apps that override all
+    // three packages together.
+    final keyboardAvoidance =
+        params.initialSettings?.toMap()['keyboardAvoidance'] as bool?;
+    if (keyboardAvoidance ?? true) {
+      _controller?.startFrameworkKeyboardInsetReporting();
+    }
     _androidParams.pullToRefreshController?.init(viewId);
     _androidParams.findInteractionController?.init(viewId);
     debugLog(
