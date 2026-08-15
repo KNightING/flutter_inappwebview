@@ -389,6 +389,41 @@ Flutter 自己會抓一支 nuget.exe（6.0.0）放到
    `gh repo view --json hasIssuesEnabled` 於 2026-08-15 回報 `true`。因此本計畫依 Rule 20
    走「需建立 issue」路線，與前幾份計畫的 `N/A` 不同。
 
+## Stage 1 結案與交棒（2026-08-15）
+
+Stage 1 已 commit：`13b0d233` — `chore: 對齊 Flutter 3.47.0 平台基準`（14 檔）。
+
+### 已驗證 / 未驗證（不得混為一談）
+
+| 項目 | 狀態 |
+| :--- | :--- |
+| Android `flutter_inappwebview/example` 建置 | ✅ exit 0（703s） |
+| Android `flutter_inappwebview_android/example` 建置 | ✅ exit 0（101s） |
+| `flutter analyze` | ✅ 非 `env.dart` 來源的 error = 0 |
+| Web 建置 | ✅ 通過（146s）+ Wasm dry run succeeded |
+| Windows 建置 | ✅ `example.exe`（519s） |
+| **Windows 實跑目視（Impeller）** | ⏳ **未完成**——交由使用者自行執行 |
+| **iOS / macOS** | ❌ **完全未驗證**，本機無 Xcode |
+| **Linux** | ❌ **完全未驗證**，本機無環境 |
+
+`env.dart` 那 25 個 analyze error 是 `.gitignore` 掉的開發者本機檔案缺失所致，
+**與 3.47 無關，且變更前後皆存在**。
+
+### macOS 接手方式
+
+1. `git fetch && git switch feature/2608151157-flutter-3-47-upgrade`
+2. 依 `tasks.md` 的 **Phase F** 逐項執行（example 的 Xcode 專案、Podfile、UIScene、實測）
+3. Phase F 的 commit 仍逐項請示（Rule 17）
+4. 全部完成後才進 Phase G（rebase + force-push + PR + 歸檔 + wikification）
+
+### 交棒時必須知道的三件事
+
+- **套件層的部署目標已改完**（`.podspec` / `Package.swift`），Stage 2 只需處理 **example 的 Xcode 專案**。
+  在 macOS 上跑 `flutter build ios` / `flutter build macos` 時，Flutter 的 migrator 會自動改寫
+  `Podfile` 與 `project.pbxproj`，複核 diff 即可，不必手改。
+- **Built-in Kotlin 警告已知且刻意不處理**（Q10）。看到它不必驚慌，也不要順手修。
+- **Windows 的 nuget 問題已釐清**（Q11），不是環境缺件，macOS 上不會遇到。
+
 ## Git Completion Policy
 
 Commit 前逐項請示（Rule 17）。任務完成前將以 `git rebase main` 後

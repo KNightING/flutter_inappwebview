@@ -39,12 +39,12 @@
 - [x] D3. `flutter build web` 通過（146s），且 **Wasm dry run succeeded**——
       反證 `package:web` 遷移已完整，套件為 Wasm-ready
 - [x] D4. `README.md:58-59` 更新為實際值（minSdk 24、AGP 9.3.0、iOS 15、macOS 12）
-- [ ] D5. 整理「已驗證 / 未驗證」清單
+- [x] D5. 整理「已驗證 / 未驗證」清單
 
 ## Phase E：Stage 1 收尾
 
-- [ ] E1. 逐項請示 commit（Rule 17）
-- [ ] E2. 交棒說明：Stage 2 待辦與接手方式寫入 `plan.md`
+- [x] E1. 逐項請示 commit（Rule 17）
+- [x] E2. 交棒說明：Stage 2 待辦與接手方式寫入 `plan.md`
 
 ---
 
