@@ -73,12 +73,26 @@ Federated plugin，一份 app-facing 套件 + 各平台實作 + 共用介面：
 
 ### 平台基準
 
-- AGP 8.13.1；`compileSdk` 取 `flutter.compileSdkVersion`（跟隨 Flutter SDK，非硬寫）；`minSdkVersion 19`。
+對齊 **Flutter 3.47.0 / Dart 3.13.0**（2026-08-15，詳見 `archive/2608151157-flutter-3-47-upgrade.md`，
+該檔另記有 3.47 各項門檻的 SDK 原始碼出處，供未來升級比對）。
+
+| 項目 | 現值 |
+| :--- | :--- |
+| AGP | **9.3.0**；Gradle wrapper 9.5.0 |
+| Kotlin Gradle Plugin | **2.4.0**（Flutter 3.47 的 template 值） |
+| `compileSdk` / `targetSdk` | 取 `flutter.compileSdkVersion`（跟隨 Flutter SDK，非硬寫）=36 |
+| `minSdkVersion` | **24**（Flutter 支援下限；app 端低於 23 即建置失敗） |
+| iOS 部署目標 | **15.0**（套件 SPM/podspec 與 example 專案一致） |
+| macOS 部署目標 | **12.0**（同上） |
+
 - iOS / macOS **同時**提供 `Package.swift`（SPM）與 `.podspec`（CocoaPods），兩者並存。
-- macOS 部署目標 **10.15**（SPM 與 podspec 一致）。2026-08 由上游的 10.14 升上來，因新版 Xcode
-  對 `ASWebAuthentication` 的可用性檢查會令 10.14 直接建置失敗——**勿降回**（詳見
-  `archive/2608140054-macos-spm-deployment-target.md`）。
-- AGP 9.0 尚未導入——若後續 Flutter SDK 要求，需自行升級。
+  **Flutter 3.47 起 SPM 於 stable 預設啟用**，故套件的 `Package.swift` 會被拉進 app 建置。
+- **macOS 部署目標勿降回 10.14**：新版 Xcode 對 `ASWebAuthentication` 的可用性檢查會令 10.14
+  直接建置失敗（詳見 `archive/2608140054-macos-spm-deployment-target.md`）。10.15 已於
+  2026-08-15 進一步升至 12.0。
+- 兩個 iOS example 已採用 **UIScene 生命週期**（`UISceneDelegateClassName` 用 engine 內建的
+  `FlutterSceneDelegate`，未新增 Swift 檔案、未改 `project.pbxproj` 結構）。
+- **已知未驗證**：實體 iOS 裝置、Linux、Windows example 實跑目視。
 
 ### JS 橋接名稱
 
@@ -103,7 +117,11 @@ Android / iOS / macOS 三平台的宣告皆位於各自的 `plugin_scripts_js` /
 
 曾以 `KNightING/camelot_inappwebview`（`arrrrny/zikzak_inappwebview` 下游）為基底，實測比對後改用本 repo：
 
-| 項目 | zikzak fork | 本 repo |
+> **下表為 2026-08-11 決策當下的快照，不代表現況。**「本 repo」欄的數值之後已隨多份計畫演進
+> （AGP 已升至 9.3.0，且本 repo 為支援 keyboardAvoidance 等功能已累積少量上游 delta，
+> 不再是「零分歧」）。**現行平台基準一律以上方的「平台基準」段為準**，此表僅保留作為當初的決策依據。
+
+| 項目 | zikzak fork | 本 repo（2026-08-11 當時） |
 | :--- | :--- | :--- |
 | 與上游分歧 | 大幅改寫，同步即大規模衝突 | **零分歧** |
 | AGP | 8.5.2 | 8.13.1 |
