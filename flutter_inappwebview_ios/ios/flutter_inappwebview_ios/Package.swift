@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "flutter_inappwebview_ios",
     platforms: [
-        .iOS("12.0"),
+        .iOS("15.0"),
     ],
     products: [
         .library(name: "flutter-inappwebview-ios", targets: ["flutter_inappwebview_ios"])
