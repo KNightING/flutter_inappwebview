@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -3803,7 +3804,24 @@ namespace flutter_inappwebview_plugin
       return;
     }
 
-    auto offset = static_cast<short>(delta * settings->scrollMultiplier);
+    auto& remainder = horizontal ? scrollRemainderX_ : scrollRemainderY_;
+    const auto scaled = delta * settings->scrollMultiplier + remainder;
+
+    // Only whole units can be sent; the rest is carried into the next frame instead of being
+    // thrown away by the conversion below.
+    auto whole = std::trunc(scaled);
+    remainder = scaled - whole;
+
+    if (whole == 0.0) {
+      return;
+    }
+
+    // scrollMultiplier is unbounded, so a large one can push the product past what a short
+    // holds -- and the conversion would wrap it into the opposite sign, scrolling backwards.
+    // Clamping first turns that into a merely capped scroll.
+    whole = (std::max)((std::min)(whole, static_cast<double>((std::numeric_limits<short>::max)())),
+      static_cast<double>((std::numeric_limits<short>::min)()));
+    const auto offset = static_cast<short>(whole);
 
     if (horizontal) {
       webViewCompositionController->SendMouseInput(
@@ -3823,12 +3841,22 @@ namespace flutter_inappwebview_plugin
       return;
     }
 
+    // Callers are expected to send one axis at a time for a single gesture: emitting a
+    // horizontal wheel alongside each vertical one makes Chromium take the sequence as
+    // horizontal and drop the vertical movement entirely. The Dart side locks a trackpad
+    // gesture to one axis for that reason; wheel events are single-axis to begin with.
     if (delta_x != 0.0) {
       sendScroll(delta_x, true);
     }
     if (delta_y != 0.0) {
       sendScroll(delta_y, false);
     }
+  }
+
+  void InAppWebView::resetScrollRemainder()
+  {
+    scrollRemainderX_ = 0.0;
+    scrollRemainderY_ = 0.0;
   }
 
   bool InAppWebView::createSurface(const HWND parentWindow,

@@ -229,6 +229,18 @@ class CustomPlatformViewController
     });
   }
 
+  /// Drops the sub-unit scroll remainder held natively.
+  ///
+  /// Called at both ends of a trackpad gesture so a fraction left behind by one gesture
+  /// cannot be spent by the next, which would show up as a small jump on first touch.
+  Future<void> _resetScrollRemainder() async {
+    if (_isDisposed) {
+      return;
+    }
+    assert(value.isInitialized);
+    return _methodChannel.invokeMethod('resetScrollRemainder');
+  }
+
   /// Sets the horizontal and vertical scroll delta.
   Future<void> _setScrollDelta(double dx, double dy) async {
     if (_isDisposed) {
@@ -300,7 +312,52 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
 
   PointerDeviceKind _pointerKind = PointerDeviceKind.unknown;
 
+  /// Axis the in-flight trackpad gesture is locked to, `null` until one is picked.
+  Axis? _panAxis;
+
+  /// Movement a gesture has to cover before its axis is decided, in logical pixels.
+  ///
+  /// The opening frames of a swipe are small and noisy, and whichever axis happens to lead
+  /// there is not yet the axis the user is scrolling along. Waiting for a real displacement
+  /// avoids locking to the wrong one.
+  static const double _panAxisLockThreshold = 3.0;
+
+  /// Movement accumulated since the gesture began, used only until the axis is locked.
+  Offset _panTravel = Offset.zero;
+
   MouseCursor _cursor = SystemMouseCursors.basic;
+
+  /// Decides which axis [delta] belongs to, locking it for the rest of the gesture.
+  ///
+  /// Only one axis may be forwarded per gesture: a trackpad reports a perpendicular component
+  /// on nearly every frame, and letting a horizontal wheel interleave with the vertical ones
+  /// makes Chromium read the whole sequence as horizontal and drop the vertical movement.
+  /// Deciding per frame instead of per gesture is not enough either -- single frames where the
+  /// minor axis happens to lead get sent to the wrong axis and their movement is lost, which
+  /// shows up as a swipe travelling less than it should.
+  ///
+  /// Returns the axis and the movement to forward on it, or `null` while the gesture is still
+  /// too small to call. On the frame that decides the axis, the returned movement covers
+  /// everything accumulated since the gesture began, so the frames spent waiting are folded in
+  /// rather than dropped.
+  (Axis, Offset)? _latchPanAxis(Offset delta) {
+    final axis = _panAxis;
+    if (axis != null) {
+      return (axis, delta);
+    }
+
+    _panTravel += delta;
+    final dx = _panTravel.dx.abs();
+    final dy = _panTravel.dy.abs();
+    if (dx < _panAxisLockThreshold && dy < _panAxisLockThreshold) {
+      return null;
+    }
+
+    _panAxis = dx > dy ? Axis.horizontal : Axis.vertical;
+    final travel = _panTravel;
+    _panTravel = Offset.zero;
+    return (_panAxis!, travel);
+  }
 
   final _controller = CustomPlatformViewController();
   final _focusNode = FocusNode();
@@ -470,8 +527,38 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
                     );
                   }
                 },
+                onPointerPanZoomStart: (ev) {
+                  _panAxis = null;
+                  _panTravel = Offset.zero;
+                  // A gesture starts from a clean slate: any sub-unit remainder left over
+                  // from the previous one would otherwise leak into its first frame.
+                  _controller._resetScrollRemainder();
+                },
                 onPointerPanZoomUpdate: (ev) {
-                  _controller._setScrollDelta(ev.panDelta.dx, ev.panDelta.dy);
+                  final latched = _latchPanAxis(ev.panDelta);
+                  if (latched == null) {
+                    return;
+                  }
+                  final (axis, delta) = latched;
+
+                  // The signs differ per axis because the wheel's own two axes do: a positive
+                  // vertical wheel scrolls the view up, a positive horizontal one scrolls it
+                  // right. panDelta is direct-manipulation throughout -- the content follows
+                  // the fingers -- so fingers moving down (positive dy) ask for the view to go
+                  // up, which is already a positive wheel, while fingers moving right
+                  // (positive dx) ask for the view to go left, which is a negative one. Both
+                  // directions were verified on hardware 2026-08-15; flipping either inverts
+                  // that axis.
+                  if (axis == Axis.horizontal) {
+                    _controller._setScrollDelta(-delta.dx, 0);
+                  } else {
+                    _controller._setScrollDelta(0, delta.dy);
+                  }
+                },
+                onPointerPanZoomEnd: (ev) {
+                  _panAxis = null;
+                  _panTravel = Offset.zero;
+                  _controller._resetScrollRemainder();
                 },
                 child: MouseRegion(
                   cursor: _cursor,
