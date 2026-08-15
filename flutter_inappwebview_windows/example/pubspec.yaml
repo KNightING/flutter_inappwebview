@@ -29,6 +29,12 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
 
+# Matches the android and ios examples: without this the example resolves the published
+# platform interface, so a setting added here cannot be exercised from the example at all.
+dependency_overrides:
+  flutter_inappwebview_platform_interface:
+    path: ../../flutter_inappwebview_platform_interface
+
 dev_dependencies:
   integration_test:
     sdk: flutter

@@ -3853,11 +3853,6 @@ namespace flutter_inappwebview_plugin
     }
   }
 
-  void InAppWebView::resetScrollRemainder()
-  {
-    scrollRemainderX_ = 0.0;
-    scrollRemainderY_ = 0.0;
-  }
 
   bool InAppWebView::createSurface(const HWND parentWindow,
     winrt::com_ptr<ABI::Windows::UI::Composition::ICompositor> compositor)

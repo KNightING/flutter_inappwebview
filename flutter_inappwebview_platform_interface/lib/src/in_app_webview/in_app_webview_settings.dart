@@ -2368,6 +2368,11 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   ///This value determines how much the content will scroll in response to user input.
   ///A higher value means faster scrolling, while a lower value means slower scrolling.
   ///
+  ///**Applies to wheel input only.** Trackpad gestures are handed to the WebView as a touch
+  ///contact and never pass through this: their scroll distance follows the actual movement of
+  ///the fingers, and scaling it would misreport how fast they moved, distorting the momentum
+  ///the browser derives from it.
+  ///
   ///The default value is `1`.
   @SupportedPlatforms(platforms: [WindowsPlatform()])
   int? scrollMultiplier;

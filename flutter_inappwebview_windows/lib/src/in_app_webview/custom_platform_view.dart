@@ -229,18 +229,6 @@ class CustomPlatformViewController
     });
   }
 
-  /// Drops the sub-unit scroll remainder held natively.
-  ///
-  /// Called at both ends of a trackpad gesture so a fraction left behind by one gesture
-  /// cannot be spent by the next, which would show up as a small jump on first touch.
-  Future<void> _resetScrollRemainder() async {
-    if (_isDisposed) {
-      return;
-    }
-    assert(value.isInitialized);
-    return _methodChannel.invokeMethod('resetScrollRemainder');
-  }
-
   /// Sets the horizontal and vertical scroll delta.
   Future<void> _setScrollDelta(double dx, double dy) async {
     if (_isDisposed) {
@@ -312,52 +300,13 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
 
   PointerDeviceKind _pointerKind = PointerDeviceKind.unknown;
 
-  /// Axis the in-flight trackpad gesture is locked to, `null` until one is picked.
-  Axis? _panAxis;
-
-  /// Movement a gesture has to cover before its axis is decided, in logical pixels.
-  ///
-  /// The opening frames of a swipe are small and noisy, and whichever axis happens to lead
-  /// there is not yet the axis the user is scrolling along. Waiting for a real displacement
-  /// avoids locking to the wrong one.
-  static const double _panAxisLockThreshold = 3.0;
-
-  /// Movement accumulated since the gesture began, used only until the axis is locked.
-  Offset _panTravel = Offset.zero;
-
   MouseCursor _cursor = SystemMouseCursors.basic;
 
-  /// Decides which axis [delta] belongs to, locking it for the rest of the gesture.
-  ///
-  /// Only one axis may be forwarded per gesture: a trackpad reports a perpendicular component
-  /// on nearly every frame, and letting a horizontal wheel interleave with the vertical ones
-  /// makes Chromium read the whole sequence as horizontal and drop the vertical movement.
-  /// Deciding per frame instead of per gesture is not enough either -- single frames where the
-  /// minor axis happens to lead get sent to the wrong axis and their movement is lost, which
-  /// shows up as a swipe travelling less than it should.
-  ///
-  /// Returns the axis and the movement to forward on it, or `null` while the gesture is still
-  /// too small to call. On the frame that decides the axis, the returned movement covers
-  /// everything accumulated since the gesture began, so the frames spent waiting are folded in
-  /// rather than dropped.
-  (Axis, Offset)? _latchPanAxis(Offset delta) {
-    final axis = _panAxis;
-    if (axis != null) {
-      return (axis, delta);
-    }
+  /// Where the in-flight trackpad gesture's synthetic contact went down.
+  Offset _panContactOrigin = Offset.zero;
 
-    _panTravel += delta;
-    final dx = _panTravel.dx.abs();
-    final dy = _panTravel.dy.abs();
-    if (dx < _panAxisLockThreshold && dy < _panAxisLockThreshold) {
-      return null;
-    }
-
-    _panAxis = dx > dy ? Axis.horizontal : Axis.vertical;
-    final travel = _panTravel;
-    _panTravel = Offset.zero;
-    return (_panAxis!, travel);
-  }
+  /// Total pan reported so far by the in-flight gesture; the end event does not carry it.
+  Offset _panTotal = Offset.zero;
 
   final _controller = CustomPlatformViewController();
   final _focusNode = FocusNode();
@@ -528,37 +477,46 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
                   }
                 },
                 onPointerPanZoomStart: (ev) {
-                  _panAxis = null;
-                  _panTravel = Offset.zero;
-                  // A gesture starts from a clean slate: any sub-unit remainder left over
-                  // from the previous one would otherwise leak into its first frame.
-                  _controller._resetScrollRemainder();
+                  // A trackpad gesture is handed over as a touch contact that starts under the
+                  // cursor and then follows the fingers, leaving the scrolling itself to the
+                  // browser. That is what produces momentum after the fingers lift, and what
+                  // lets a diagonal swipe move both axes at once -- a synthetic wheel carries
+                  // one axis per event and can express neither.
+                  _panContactOrigin = ev.localPosition;
+                  _panTotal = Offset.zero;
+                  _controller._setPointerUpdate(
+                    InAppWebViewPointerEventKind.down,
+                    ev.pointer,
+                    ev.localPosition,
+                    0,
+                    0,
+                  );
                 },
                 onPointerPanZoomUpdate: (ev) {
-                  final latched = _latchPanAxis(ev.panDelta);
-                  if (latched == null) {
-                    return;
-                  }
-                  final (axis, delta) = latched;
-
-                  // The signs differ per axis because the wheel's own two axes do: a positive
-                  // vertical wheel scrolls the view up, a positive horizontal one scrolls it
-                  // right. panDelta is direct-manipulation throughout -- the content follows
-                  // the fingers -- so fingers moving down (positive dy) ask for the view to go
-                  // up, which is already a positive wheel, while fingers moving right
-                  // (positive dx) ask for the view to go left, which is a negative one. Both
-                  // directions were verified on hardware 2026-08-15; flipping either inverts
-                  // that axis.
-                  if (axis == Axis.horizontal) {
-                    _controller._setScrollDelta(-delta.dx, 0);
-                  } else {
-                    _controller._setScrollDelta(0, delta.dy);
-                  }
+                  // pan is the total since the gesture began, which is exactly where the
+                  // contact should now be. No sign flip: a touch contact follows the fingers,
+                  // and so does pan.
+                  _panTotal = ev.pan;
+                  _controller._setPointerUpdate(
+                    InAppWebViewPointerEventKind.update,
+                    ev.pointer,
+                    _panContactOrigin + ev.pan,
+                    0,
+                    0,
+                  );
                 },
                 onPointerPanZoomEnd: (ev) {
-                  _panAxis = null;
-                  _panTravel = Offset.zero;
-                  _controller._resetScrollRemainder();
+                  // Lifting the contact is what lets the browser turn the movement that
+                  // preceded it into a fling; the end event carries no pan of its own, so the
+                  // last known position is reused.
+                  _controller._setPointerUpdate(
+                    InAppWebViewPointerEventKind.up,
+                    ev.pointer,
+                    _panContactOrigin + _panTotal,
+                    0,
+                    0,
+                  );
+                  _panTotal = Offset.zero;
                 },
                 child: MouseRegion(
                   cursor: _cursor,
