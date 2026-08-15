@@ -20,6 +20,7 @@ namespace flutter_inappwebview_plugin
   constexpr auto kMethodSetPointerUpdate = "setPointerUpdate";
   constexpr auto kMethodSetPointerButton = "setPointerButton";
   constexpr auto kMethodSetScrollDelta = "setScrollDelta";
+  constexpr auto kMethodResetScrollRemainder = "resetScrollRemainder";
   constexpr auto kMethodSetFpsLimit = "setFpsLimit";
 
   constexpr auto kEventType = "type";
@@ -276,6 +277,14 @@ namespace flutter_inappwebview_plugin
         return result->Success();
       }
       return result->Error(kErrorInvalidArgs);
+    }
+
+    // resetScrollRemainder: no arguments
+    if (method_name.compare(kMethodResetScrollRemainder) == 0) {
+      if (view) {
+        view->resetScrollRemainder();
+      }
+      return result->Success();
     }
 
     // setPointerButton: {"button": int, "isDown": bool}
