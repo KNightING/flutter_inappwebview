@@ -79,7 +79,7 @@ iOS / macOS 最低部署版本（migrator 的取代值即官方新下限）：
 | **macOS 套件部署目標** | **10.15** | 12.0 | ❌ 落後（2026-08-14 才從 10.14 升上來） |
 | example iOS/macOS 專案 | 13.0 / 10.15 | 15.0 / 12.0 | ❌ 落後（但 migrator 會自動改寫） |
 | Web（`dart:html`） | 已用 `package:web` | `package:web` | ✅ 已合格，無需遷移 |
-| **iOS example UIScene** | **未採用** | Xcode 27 建置的 app 必須採用 | ⚠️ 見 Q4 |
+| **iOS example UIScene** | **未採用** | 未來 iOS 版本要求；3.47 已內建自動遷移器 | ⚠️ 見 Q4 / Q12 更正 / Q16 |
 
 ### AGP 9.3.0 為何仍然通過
 
@@ -356,6 +356,329 @@ Flutter 自己會抓一支 nuget.exe（6.0.0）放到
 長期解法是把 nuget.exe 放到穩定位置並加入 PATH（或依 README 安裝 NuGet CLI）。
 此狀態只存在於 gitignore 的 `build/` 內，不影響版控。
 
+### Q12.（Stage 2 浮現）本機是 Xcode 26.4.1，不是 Xcode 27 — 影響：Q4 的驗證強度上限
+Q4 採用 UIScene 的理由是「以 Xcode 27 建置且未採用 UIScene 的 app 啟動即失敗」。
+本機實測（2026-08-15）為 **Xcode 26.4.1（Build 17E202）**、macOS 26.5.2。
+
+**更新後複測（同日，使用者回報已更新 Xcode）**：實際為 **26.6（Build 17F113）**，
+SDK 為 iOS 26.5 / macOS 26.5。**仍非 Xcode 27**，因此本題的判斷與驗證強度上限**完全不變**。
+此處記下兩個版本是為了避免日後誤以為「更新過就等於驗證過」。
+
+因此**「不採用就啟動失敗」這個前提，在本機無法重現**——Xcode 26 下不採用 UIScene 的 app
+仍能正常啟動。本機能驗證的是**反向命題**：採用 UIScene 之後，在 Xcode 26 / iOS 26 模擬器上
+不會壞掉。這是有價值的（採用本身有風險，需確認無回歸），但**不等於**驗證了 Xcode 27 的行為。
+
+此落差必須誠實寫進結論，不得以「UIScene 已驗證」含混帶過。
+
+- [x] **A.（使用者於 2026-08-15 確認）** 仍照 Q4/C 採用，並明確標註「Xcode 27 的強制性未在本機驗證」。
+- [ ] B. 既然本機無法重現該強制性，Stage 2 不做 UIScene，退回 Q4/A（記入 wiki，等有 Xcode 27 再說）。
+
+狀態：✅ 已確認（2026-08-15）
+
+#### ⚠️ 前提更正（2026-08-15，使用者質疑後查證 SDK）
+
+使用者指出「商城裡沒有 Xcode 27」。據此**直接查本機 SDK 原始碼**，結果推翻了原本的敘述：
+
+| 查證項目 | 結果 |
+| :--- | :--- |
+| SDK 內 "Xcode 27" 字樣 | **零筆**（`xcode.dart` / `xcode_validator.dart` 皆無） |
+| `xcode.dart:24` `xcodeRequiredVersion` | **15** |
+| `xcode.dart:28` `xcodeRecommendedVersion` | **16** |
+| SDK 警告的實際措辭 | `uiscene_migration.dart:299` — **"upcoming iOS versions"**，非「Xcode 27」 |
+
+**結論**：Q4 與本題原本引用的「以 Xcode 27 建置且未採用 UIScene 的 app 啟動即失敗」，
+是 Stage 1 從 blog 轉述的說法，**無法在 SDK 原始碼中佐證**（違反 Rule 18 的佐證標準，此處更正）。
+SDK 能佐證的只有較弱的版本：**UIScene 是「未來 iOS 版本」的requirement，時程未由 SDK 指明**。
+
+Xcode 27 本身是否已發布，**本計畫無從查證**，不作任何主張。
+商城查無此版本與「尚未發布」相符，但這不是本計畫需要斷定的事。
+
+**對決策的影響：無。** 採用 UIScene 的理由從「Xcode 27 會擋」改為
+「Flutter 官方工具已內建遷移器且 stable 預設啟用，方向明確」——**理由更強而非更弱**（見 Q16）。
+改變的只是**結論的措辭**：不得宣稱「為了 Xcode 27」，應寫「為未來 iOS 版本的 UIScene 要求預作準備」。
+
+### Q13.（Stage 2 浮現）SceneDelegate 要獨立成檔還是併入 AppDelegate.swift — 影響：pbxproj 改動風險
+Flutter 3.47 的 app 範本（本機 SDK 實際讀出，
+`packages/flutter_tools/templates/app/ios.tmpl/Runner/`）採用 UIScene 的形狀是三件事：
+
+1. `Info.plist` 加 `UIApplicationSceneManifest`，其 `UISceneDelegateClassName`
+   為 `$(PRODUCT_MODULE_NAME).SceneDelegate`
+2. 新增 `SceneDelegate.swift`，內容僅 `class SceneDelegate: FlutterSceneDelegate {}`
+3. `AppDelegate` 改為 `FlutterImplicitEngineDelegate`，插件註冊移到
+   `didInitializeImplicitFlutterEngine`
+
+其中第 2 點若照範本**新增獨立檔案**，就必須手動改 `project.pbxproj`
+（`PBXFileReference` + `PBXBuildFile` + `PBXSourcesBuildPhase` + group 四處），
+那是本次改動中**唯一有實質破壞風險**的操作。
+
+`UISceneDelegateClassName` 是以 **module + 類別名**解析的，與檔名無關——
+因此把 `class SceneDelegate: FlutterSceneDelegate {}` 直接寫在既有的
+`AppDelegate.swift` 裡，功能完全等價，且**完全不需要動 pbxproj**。
+
+- [ ] ~~A. 併入 `AppDelegate.swift`~~ — **作廢**，見下方更正。
+- [ ] ~~B. 照範本新增獨立 `SceneDelegate.swift` + 手動改 pbxproj 四處~~ — **作廢**，見下方更正。
+- [x] **C.（2026-08-15 查證 SDK 後新增，取代 A/B）跟隨官方遷移器的做法：
+  `UISceneDelegateClassName` 直接用 engine 內建的 `FlutterSceneDelegate`，
+  不新增任何 Swift 檔案，不碰 `project.pbxproj`。**
+
+狀態：✅ 已更正（2026-08-15）
+
+#### ⚠️ A/B 為何都作廢
+
+本題原本的前提是「採用 UIScene 必須有一個自己的 SceneDelegate 類別」——**這個前提錯了**。
+
+我原先是照**新專案範本**（`app/ios.tmpl`）的形狀規劃，那份範本確實用
+`$(PRODUCT_MODULE_NAME).SceneDelegate` 並附一個 `SceneDelegate.swift`。
+但**既有專案的遷移路徑**走的是另一條：`uiscene_migration.dart:277` 寫入的
+`UISceneDelegateClassName` 是 **`FlutterSceneDelegate`**——engine 已經提供的類別。
+
+兩條路都合法，但遷移路徑：
+
+- **不新增檔案** → 不需要 `PBXFileReference` / `PBXBuildFile` / `PBXSourcesBuildPhase` / group 四處編輯
+- **因此本計畫原本唯一的高風險操作，整個消失**
+
+原本因採 B 而加上的「pbxproj 改完先驗證可解析、失敗即還原」防線，**隨之不再需要**。
+
+### Q14.（Stage 2 浮現）兩個 iOS example 的 AppDelegate 屬性不一致 — 影響：是否順手統一
+- `flutter_inappwebview/example/ios/Runner/AppDelegate.swift:5` — `@UIApplicationMain`（**已在新版 Swift 棄用**）
+- `flutter_inappwebview_ios/example/ios/Runner/AppDelegate.swift:4` — `@main`（現行寫法）
+
+若執行 Q4/C 的 UIScene 採用，前者無論如何都要動到該檔案，順手改為 `@main` 的邊際成本為零。
+但這已越過「基準對齊」一步，屬於既有的、與 3.47 無關的落差。
+
+- [x] **A.（使用者於 2026-08-15 確認）** 採用 UIScene 時一併改為 `@main`
+  （同一檔案、同一次編輯，且 `@UIApplicationMain` 已棄用）。
+- [ ] B. 不動，僅記錄落差。
+
+狀態：✅ 已確認（2026-08-15）
+
+### Q15.（Stage 2 浮現）插件註冊要不要跟進 `FlutterImplicitEngineDelegate` — 影響：改動幅度
+3.47 範本把 `GeneratedPluginRegistrant.register` 從 `didFinishLaunchingWithOptions`
+移到 `didInitializeImplicitFlutterEngine(_:)`。舊寫法在 3.47 下**仍可運作**，不是必須。
+
+注意 `flutter_inappwebview/example` 的 AppDelegate 內有 `flutter_downloader` 的
+註冊 callback（目前整段註解掉），改動時需原樣保留，不得順手清理。
+
+- [ ] A.（建議）**維持現行 `didFinishLaunchingWithOptions` 註冊**。理由：UIScene 採用與插件註冊時機
+  是兩件獨立的事，一次只動一個變數；出問題時才能定位是誰造成的。
+- [x] **B.（使用者於 2026-08-15 指定）** 一併跟進範本的 `FlutterImplicitEngineDelegate` 寫法。
+
+狀態：✅ 已確認（2026-08-15）
+
+**已揭露的取捨**：本選項與建議相反，等於在同一次 commit 內同時改動
+「UIScene 採用」與「插件註冊時機」兩個變數。使用者已知悉並採納。
+**因應**：F-B 的實跑若出現插件相關異常（例如 WebView 未註冊、平台通道無回應），
+處置方式是先把註冊改回 `didFinishLaunchingWithOptions` 二分定位，
+而非直接推斷為 UIScene 的問題。
+`flutter_inappwebview/example` 內既有的 `flutter_downloader` 註解區塊原樣保留，不順手清理。
+
+### Q16.（Stage 2 浮現，**推翻 Q13 的前提**）Flutter 3.47 內建 UIScene 自動遷移器
+
+查證 Q12 時發現 `packages/flutter_tools/lib/src/migrations/uiscene_migration.dart`（314 行），
+由 `ios/mac.dart:186` 在 iOS 建置流程中呼叫，旗標為 `featureFlags.isUISceneMigrationEnabled`。
+
+**stable channel 預設啟用**（`features.dart:294-304`）：
+
+```
+configSetting: 'enable-uiscene-migration'
+environmentOverride: 'FLUTTER_UISCENE_MIGRATION'
+stable: FeatureChannelSetting(available: true, enabledByDefault: true)
+```
+
+即：**只要在 macOS 上跑 `flutter build ios`，它就會自動嘗試遷移**，與部署目標 migrator 同一個機制。
+
+#### 遷移器的實際行為（逐行讀出，非推測）
+
+`_migrateInfoPlist()`（`:270-283`）插入的 `UIApplicationSceneManifest` 為：
+
+```json
+{
+  "UIApplicationSupportsMultipleScenes": false,
+  "UISceneConfigurations": {
+    "UIWindowSceneSessionRoleApplication": [{
+      "UISceneClassName": "UIWindowScene",
+      "UISceneDelegateClassName": "FlutterSceneDelegate",
+      "UISceneConfigurationName": "flutter",
+      "UISceneStoryboardFile": "Main"
+    }]
+  }
+}
+```
+
+`_migrateAppDelegate()`（`:236-268`）把 `AppDelegate.swift` 整份取代為
+`newSwiftAppDelegate`（`:170-186`）——即 `@main` + `FlutterImplicitEngineDelegate` +
+`didInitializeImplicitFlutterEngine` 註冊。
+
+**關鍵差異**：`UISceneDelegateClassName` 是 **`FlutterSceneDelegate`**（engine 內建），
+**不是**新專案範本用的 `$(PRODUCT_MODULE_NAME).SceneDelegate`。
+因此遷移路徑**不新增任何 Swift 檔案，也完全不碰 `project.pbxproj`**。
+
+#### 自動遷移的三個硬性前置條件
+
+1. `Info.plist` 尚無 `UIApplicationSceneManifest`（`:206-209`）
+2. `Info.plist` 的 `UIMainStoryboardFile` **必須等於 `Main`**（`:212-224`）
+3. `AppDelegate.swift` 內容**逐字元命中** 5 個範本之一（`:236-247`，比對前 `.trim()`）
+
+不滿足即**不自動改**，只 `printError` 指向 `https://flutter.dev/to/uiscene-migration`。
+
+#### 本 repo 兩個 iOS example 的實際判定（2026-08-15 程式化比對）
+
+| example | `UIMainStoryboardFile` | AppDelegate 比對 | 判定 |
+| :--- | :--- | :--- | :--- |
+| `flutter_inappwebview_ios/example` | `Main` ✅ | **命中範本 #4** | ✅ **會自動遷移** |
+| `flutter_inappwebview/example` | `Main` ✅ | ❌ 不命中任一範本 | ⚠️ **只印警告，需手動** |
+
+後者不命中的原因是該檔含 `//import flutter_downloader`、`@UIApplicationMain` 後多一個空行、
+以及檔尾註解掉的 `registerPlugins` 區塊——與範本不是逐字元相同。
+
+#### 對計畫的影響
+
+- **Q13 的 A/B 兩選項作廢**，改為跟隨遷移器（見 Q13 的更正）。本計畫唯一的高風險編輯消失。
+- **Q14（`@main`）與 Q15（`FlutterImplicitEngineDelegate`）的使用者決議，
+  正好等於遷移器的輸出**——兩者不需另行實作，自動遷移即達成。
+- 手動處理的那個 example，**照遷移器的輸出形狀寫**，使兩個 example 結果一致。
+  其中 `flutter_downloader` 的註解區塊需決定去留（見下）。
+
+- [x] **A.（採用）** 讓遷移器自動處理 `flutter_inappwebview_ios/example`；
+  `flutter_inappwebview/example` 依遷移器的輸出形狀手動套用，保留 `flutter_downloader` 註解區塊。
+- [ ] B. 兩個都手動，不倚賴遷移器（無理由，徒增出錯機會）。
+- [ ] C. 先把 `flutter_inappwebview/example` 的 AppDelegate 改成與範本逐字元相同（刪掉註解），
+  讓遷移器也能自動處理它——但這會刪掉 `flutter_downloader` 的既有註解，屬於夾帶清理。
+
+狀態：✅ 已確認（2026-08-15）
+
+### Q17.（Stage 2 執行中浮現，**阻斷性**）兩個 federated 子 example 的 `pub get` 失敗
+
+F-A 一開工即撞到：`flutter_inappwebview_ios/example` 與 `flutter_inappwebview_macos/example`
+的 `flutter pub get` **失敗**：
+
+```
+Because flutter_inappwebview_ios_example depends on flutter_inappwebview_ios from path
+which depends on flutter_inappwebview_platform_interface ^1.4.0-beta.3,
+flutter_inappwebview_platform_interface from hosted is required.
+So, because flutter_inappwebview_ios_example depends on
+flutter_inappwebview_platform_interface from path, version solving failed.
+```
+
+**是來源衝突，不是版本衝突**：套件的 `pubspec.yaml:23` 宣告 **hosted** 依賴
+（`flutter_inappwebview_platform_interface: ^1.4.0-beta.3`，`:24` 的 path 是註解掉的），
+而 example 宣告 **path** 依賴，pub 無法調和兩個來源。
+本地 `flutter_inappwebview_platform_interface/pubspec.yaml:3` 的版本是 `1.4.0-beta.3`，
+**版本本身完全滿足約束**——問題純粹在來源。
+
+#### 三項查證（皆於 2026-08-15 實際執行）
+
+1. **與本分支無關、與 Flutter 3.47 無關**：在 `main` 的乾淨 worktree 上重現同一則失敗。
+   屬**既有問題**，不是本次升級造成。
+2. **成因明確**：`flutter_inappwebview_android/example/pubspec.yaml:42-44` **已有**
+   `dependency_overrides`，由 commit `1c12f440f`（"fix broken Android baseline on both example apps"）
+   加入——這正是 Stage 1 的 Android 建置能通過的原因。
+   而 `git log -S "dependency_overrides"` 對 ios / macos 兩個子 example **查無任何紀錄**，
+   即**從未加過**。合理推斷：當時無 macOS 環境，這兩個子 example 跑不到，因此未被發現。
+3. **修法已驗證**：在拋棄式 worktree 套用與 Android 相同的 4 行，兩者 `pub get` 皆通過
+   （worktree 事後移除，未污染本 repo）。
+
+#### 為何必須在本計畫處理
+
+`flutter_inappwebview_ios/example` 是 **Q16 判定唯一會自動遷移 UIScene 的 example**
+（AppDelegate 逐字元命中範本 #4）。它無法 `pub get`，F-B 的核心（驗證官方自動遷移）
+就完全做不成，只剩手動的那一半——等於 UIScene 這項的驗證強度砍半。
+
+- [x] **A.（使用者於 2026-08-15 核准）補上 `dependency_overrides`，納入本計畫。**
+  內容與 `flutter_inappwebview_android/example` 完全相同，有 `1c12f440f` 的先例可循。
+  **獨立成一個 commit**，不與基準對齊的變更混同。
+- [ ] B. 跳過兩個子 example，只驗證 `flutter_inappwebview/example`。
+- [ ] C. 另開計畫先修，本計畫暫停等待。
+
+狀態：✅ 已確認（2026-08-15）
+
+**範圍誠實揭露**：本項嚴格說已超出「只做基準對齊」的自我約束——它修的是既有缺陷，
+不是 3.47 的對齊。納入的理由是**它阻斷了本計畫已核准的驗證項目**，
+且修法有同 repo 的既有先例、無設計裁量空間。以獨立 commit 隔離，使其可被單獨 revert。
+
+### Q18.（Stage 2 執行中浮現，**阻斷性**）SPM 鎖定檔把 swift-collections 釘在不相容的 1.3.0
+
+F-A 的第一次 iOS 建置失敗（`flutter_inappwebview_ios/example`）：
+
+```
+xcodebuild: error: Could not resolve package dependencies:
+  Disabled default traits on package 'swift-collections' (swift-collections)
+  that declares no traits. This is prohibited to allow packages to adopt
+  traits initially without causing an API break.
+```
+
+**與部署目標、UIScene 兩項變更皆無關**——那兩個 migrator 都已成功執行，失敗發生在其後的
+SPM 依賴解析階段。
+
+#### 成因鏈（逐項實測，非推測）
+
+1. **Flutter 3.47 stable 預設啟用 SPM**（`features.dart:233-240`，
+   `swiftPackageManager` 的 `stable: enabledByDefault: true`；本機 `flutter config` 未覆寫）。
+   因此套件的 `Package.swift` 會被拉進 app 建置。
+2. 套件宣告 `.package(url: swift-collections, from: "1.2.1")`
+   （`flutter_inappwebview_ios/ios/flutter_inappwebview_ios/Package.swift:15`）——
+   語意為 `>=1.2.1 <2.0.0`，**本身沒有問題**。
+3. 真正的釘選來自**已納入版控**的
+   `flutter_inappwebview_ios/ios/flutter_inappwebview_ios/Package.resolved`，
+   其 `version` 為 **`1.3.0`**。
+4. swift-collections **1.3.0** 在 **Swift 6.3.3**（Xcode 26.6 隨附）的 traits 規則下被拒。
+
+#### 實測矩陣（四次建置，皆於 2026-08-15）
+
+| `Package.swift` 宣告 | 實際解析版本 | 結果 |
+| :--- | :--- | :--- |
+| `from: "1.2.1"`（上游原狀）+ 舊 `Package.resolved` | **1.3.0** | ❌ 失敗 |
+| `"1.2.1"..<"1.3.0"` | 1.2.x | ✅ 通過 |
+| `from: "1.4.1"` | 1.6.0 | ✅ 通過 |
+| **`from: "1.2.1"`（上游原狀）+ 重新解析** | **1.6.0** | ✅ **通過**（34.4s，乾淨建置） |
+
+最後一列是關鍵：**`Package.swift` 完全不必改**，只要讓 SPM 重新解析即可。
+前面兩個「成功」的實驗因此都是不必要的繞路，已全部還原。
+
+> **一次方法論失誤的自我更正**：第一次「還原後仍通過」的測試只跑了 7 秒且無 `Package.resolved`
+> 產出，實為沿用前次成功建置的產物，**結論不成立**。已改以 `flutter clean` +
+> 移除 `swiftpm/` / `Pods` / `Podfile.lock` 後重測，才取得上表最後一列的可信結果。
+> 此處記錄以免日後誤信被污染的實驗。
+
+#### ⚠️ 結論更正：**不是版本問題，是一次性的冷快取解析失敗**
+
+上表原本導向「更新 `Package.resolved` 到 1.6.0」的處置。**該處置是錯的**，
+被後續兩項觀察推翻：
+
+1. **macOS 子 example 以 `1.3.0` 建置成功**（`Package.resolved` 未動、實際解析亦為 1.3.0）。
+   若 1.3.0 與 Swift 6.3.3 的 traits 規則本質不相容，macOS 不可能通過。
+2. **決定性複測**：把 iOS 的 `Package.resolved` **還原為上游原本的 1.3.0**，
+   執行 `flutter clean` + 移除 `swiftpm/` / `Pods` / `Podfile.lock` 後重建
+   → **`✓ Built`（28.3s），`Disabled default traits` 出現 0 次。**
+
+**真正的成因**：首次啟用 SPM 整合時，在冷快取狀態下產生了一次壞的依賴解析。
+清除解析狀態重建即自行消失，**與 swift-collections 的版本無關**。
+
+#### 處置（更正後）
+
+- [ ] ~~A. 更新兩個套件的 `Package.resolved` 至 1.6.0~~ — **作廢，已還原**。
+- [ ] ~~B. 改 `Package.swift` 調整版本區間~~ — **作廢**。
+- [ ] ~~C. 關閉 SPM~~ — 作廢。
+- [x] **D.（採用）本 repo 不做任何變更。** 套件本體的 `Package.swift` 與 `Package.resolved`
+  維持上游原狀，與上游 delta **為零**。
+
+狀態：✅ 已確認（2026-08-15）
+
+**留給後人的操作提示（非程式碼變更）**：在**首次**於新機器建置本 repo 的 iOS example 時，
+可能遇到一次 `Could not resolve package dependencies: Disabled default traits...`。
+處置是清除解析狀態後重建，**不要**去改 `Package.swift` 或 `Package.resolved`：
+
+```
+flutter clean
+rm -rf ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm ios/Pods ios/Podfile.lock
+flutter pub get && flutter build ios --simulator --debug
+```
+
+**方法論教訓（第二次，記錄以自我約束）**：本題我一度依「四次建置矩陣」就下結論，
+但那四次都建立在**同一條被污染的快取時間線**上——先前實驗把 1.6.0 灌進共用快取，
+才使得「改版本就會過」看似成立。真正有判別力的實驗是**還原變數後的乾淨複測**，
+而不是「換一個值試試看會不會過」。變更前後都必須在同等乾淨的狀態下比較。
+
 ## Key Decisions
 
 - **iOS 15 / macOS 12 全面採用，套件與 example 皆升**（來源：Q1，使用者 2026-08-15 核准）。
@@ -377,6 +700,28 @@ Flutter 自己會抓一支 nuget.exe（6.0.0）放到
   發現問題另開計畫修，不在本計畫夾帶行為變更。
 - **Material/Cupertino 獨立套件遷移不做**（來源：Q7）。理由：11 月才正式棄用，現在遷移會與上游全面衝突。
 - **`README.md` 在 Stage 1 更新，`project.md` 與 wiki 留給 Phase 5**（來源：Q8，Rule 18）。
+
+### Stage 2 追加（2026-08-15，macOS 環境）
+
+- **補上兩個 federated 子 example 的 `dependency_overrides`**（來源：Q17，使用者核准）。
+  既有缺陷、非本次升級造成，但阻斷了已核准的驗證項目。與 Android 子 example 的既有修法一致，
+  獨立 commit 以便單獨 revert。
+
+- **UIScene 照原訂採用**（來源：Q12）。但**採用的理由已更正**：
+  SDK 原始碼內**查無任何 "Xcode 27" 字樣**（required=15 / recommended=16），
+  Stage 1 引用的「Xcode 27 建置即啟動失敗」無法佐證，屬 blog 轉述。
+  改以 SDK 可佐證的理由陳述：**UIScene 是未來 iOS 版本的要求，且 Flutter 3.47 已內建
+  stable 預設啟用的自動遷移器**——方向明確，理由較原本更強。
+  結論措辭不得再宣稱「為了 Xcode 27」。
+- **~~SceneDelegate 照範本獨立成檔~~ → 改為跟隨官方遷移器，用 engine 內建的 `FlutterSceneDelegate`，
+  不新增檔案、不碰 pbxproj**（來源：Q13 更正 + Q16）。
+  原決議（獨立成檔 + pbxproj 四處手動編輯）**作廢**——它建立在「必須自己有一個 SceneDelegate 類別」
+  這個錯誤前提上。本計畫原本唯一的高風險編輯因此消失，相應的還原防線也不再需要。
+- **`@UIApplicationMain` → `@main`**（來源：Q14）。理由：同檔同次編輯、邊際成本為零，且已棄用。
+- **插件註冊跟進 `FlutterImplicitEngineDelegate`**（來源：Q15，使用者指定選項 B）。
+  查證後確認：**這正是官方遷移器自己會寫出的結果**（`uiscene_migration.dart:170-186`），
+  因此不是「額外多改一個變數」，而是採用 UIScene 的官方路徑本身就包含它。
+  原先揭露的「同時改兩個變數」顧慮**因此解除**。
 
 ## 附帶回報（非本計畫範圍，僅揭露）
 
@@ -423,6 +768,58 @@ Stage 1 已 commit：`13b0d233` — `chore: 對齊 Flutter 3.47.0 平台基準`�
   `Podfile` 與 `project.pbxproj`，複核 diff 即可，不必手改。
 - **Built-in Kotlin 警告已知且刻意不處理**（Q10）。看到它不必驚慌，也不要順手修。
 - **Windows 的 nuget 問題已釐清**（Q11），不是環境缺件，macOS 上不會遇到。
+
+## Stage 2 開工基準（macOS 環境，2026-08-15）
+
+### 環境實測值
+
+| 項目 | 值 |
+| :--- | :--- |
+| Flutter | 3.47.0 stable（Dart 3.13.0） |
+| Xcode | **26.6（Build 17F113）** — **不是 27**，見 Q12 |
+| Xcode SDK | iOS 26.5 / macOS 26.5 |
+| macOS | 26.5.2（25F84） |
+| CocoaPods | 1.17.0 |
+| 可用模擬器 | iPhone 17 Pro、iPhone 17（iOS 26.5）|
+| SDK 路徑 | `flutter` 指向本機 `~/flutter` |
+
+分支 `feature/2608151157-flutter-3-47-upgrade` 已拉取，工作區乾淨，
+`13b0d233`（Stage 1）與 `8b069cc0`（交棒文件）皆在。
+
+### Code Evidence Scan 複核（2026-08-15，於本分支）
+
+Stage 1 在 Windows 上記錄的錨點**全部複核通過**，無漂移：
+
+| 檔案 | 行 | 現值 |
+| :--- | :--- | :--- |
+| `flutter_inappwebview/example/ios/Podfile` | 2 | `platform :ios, '13.0'` |
+| `flutter_inappwebview_ios/example/ios/Podfile` | 2 | `# platform :ios, '13.0'`（註解） |
+| `flutter_inappwebview/example/ios/Runner.xcodeproj/project.pbxproj` | 579, 632 | `13.0`（473/511 已是 16.0） |
+| `flutter_inappwebview_ios/example/ios/Runner.xcodeproj/project.pbxproj` | 477, 608, 657 | `13.0` |
+| `flutter_inappwebview/example/macos/Podfile` | 1 | `platform :osx, '10.15'` |
+| `flutter_inappwebview_macos/example/macos/Podfile` | 1 | `platform :osx, '10.15'` |
+| `flutter_inappwebview/example/macos/Runner.xcodeproj/project.pbxproj` | 399, 478, 525 | `10.15` |
+| `flutter_inappwebview_macos/example/macos/Runner.xcodeproj/project.pbxproj` | 559, 651, 698 | `10.15` |
+| 兩個 iOS example 的 `Info.plist` | — | **無** `UIApplicationSceneManifest`（Q4 前提成立） |
+
+本機 SDK 的 migrator 取代值也已直接讀出確認，與 Stage 1 記載一致：
+`ios_deployment_target_migration.dart:118` → `15.0`（`:92` 涵蓋原值 `13.0`）、
+`macos_deployment_target_migration.dart:66` → `12.0`（`:41` 涵蓋原值 `10.15`）。
+**即 `flutter build` 一跑，這兩組值會被自動改寫，不需手改。**
+
+### Stage 2 的驗證範圍與已知上限
+
+- ✅ 可實測：iOS 模擬器建置與執行、macOS 建置與執行（含 Impeller 預設下的 WKWebView）、
+  `pod install` / podspec 一致性。
+- ❌ 無法實測：**實體 iOS 裝置**（本機未接）、**Xcode 27 對 UIScene 的強制性**（本機為 26.6，Q12）。
+- 沿用 Stage 1 的未驗證區域：Linux、Windows 實跑目視。
+
+### 執行順序（先低風險，後高風險）
+
+1. 部署目標（讓 migrator 自動改寫，人只複核 diff）→ 建置驗證
+2. UIScene 採用（唯一的行為變更）→ 再次建置與執行驗證
+
+兩者分開驗證，才能在出問題時分辨是部署目標還是 UIScene 造成的。
 
 ## Git Completion Policy
 
