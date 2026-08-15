@@ -5,6 +5,7 @@
 ## 功能索引
 
 - [軟鍵盤避讓（keyboardAvoidance）](features/keyboard-avoidance.md)
+- [Windows 捲動輸入](features/windows-scroll-input.md)
 
 ---
 
