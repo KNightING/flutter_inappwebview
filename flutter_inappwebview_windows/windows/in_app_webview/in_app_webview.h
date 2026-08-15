@@ -140,7 +140,6 @@ namespace flutter_inappwebview_plugin
     void setPointerButtonState(InAppWebViewPointerEventKind kind, InAppWebViewPointerButton button);
     void sendScroll(double offset, bool horizontal);
     void setScrollDelta(double delta_x, double delta_y);
-    void resetScrollRemainder();
     void onSurfaceSizeChanged(SurfaceSizeChangedCallback callback)
     {
       surfaceSizeChangedCallback_ = std::move(callback);
@@ -252,10 +251,9 @@ namespace flutter_inappwebview_plugin
     CursorChangedCallback cursorChangedCallback_;
     float scaleFactor_ = 1.0;
     POINT lastCursorPos_ = { 0, 0 };
-    // Scroll amounts that did not add up to a whole unit yet, kept per axis. A trackpad can
-    // report well under one unit per frame -- horizontally it is routinely a fraction -- and
-    // the conversion to the short SendMouseInput takes truncates toward zero, so without
-    // carrying the leftover across frames that movement is dropped a sliver at a time.
+    // Wheel amounts that did not add up to a whole unit yet, kept per axis. The conversion to
+    // the short SendMouseInput takes truncates toward zero, so without carrying the leftover
+    // across events the fractional part is dropped a sliver at a time.
     double scrollRemainderX_ = 0.0;
     double scrollRemainderY_ = 0.0;
     VirtualKeyState virtualKeys_;
