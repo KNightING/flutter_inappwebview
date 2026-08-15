@@ -66,10 +66,10 @@
 - [x] F2a. 查證 `pub get` 失敗成因：來源衝突（hosted vs path），非版本問題
 - [x] F2b. 於 `main` 乾淨 worktree 重現 → 確認**既有問題**，與本分支/3.47 無關
 - [x] F2c. 於拋棄式 worktree 驗證修法可行，事後移除
-- [ ] F2d. `flutter_inappwebview_ios/example/pubspec.yaml` 補 `dependency_overrides`
-- [ ] F2e. `flutter_inappwebview_macos/example/pubspec.yaml` 補 `dependency_overrides`
-- [ ] F2f. 三個 example 的 `pub get` 全數通過
-- [ ] F2g. 請示 commit（**獨立 commit**，不與基準對齊混同）
+- [x] F2d. `flutter_inappwebview_ios/example/pubspec.yaml` 補 `dependency_overrides`
+- [x] F2e. `flutter_inappwebview_macos/example/pubspec.yaml` 補 `dependency_overrides`
+- [x] F2f. 三個 example 的 `pub get` 全數通過
+- [x] F2g. 請示 commit（**獨立 commit**，不與基準對齊混同）
 
 ### F-A1：解除阻礙（Q18，執行中浮現）
 
@@ -83,16 +83,16 @@
 
 ### F-A：部署目標（低風險，migrator 自動改寫）
 
-- [ ] F3. iOS 部署目標 13.0 → 15.0：跑 `flutter build ios --simulator --debug`
+- [x] F3. iOS 部署目標 13.0 → 15.0：跑 `flutter build ios --simulator --debug`
       讓 migrator 改寫兩個 example 的 `Podfile` + `project.pbxproj`，**逐行複核 diff**
-- [ ] F4. macOS 部署目標 10.15 → 12.0：跑 `flutter build macos --debug`，同樣複核 diff
-- [ ] F5. 複核 migrator **未**動到套件層（`.podspec` / `Package.swift` 應維持 Stage 1 的值）
-- [ ] F6. 建置驗證（此時尚未動 UIScene，確立乾淨基準）：
-      - [ ] F6a. `flutter_inappwebview/example` iOS 模擬器建置
-      - [ ] F6b. `flutter_inappwebview_ios/example` iOS 模擬器建置
-      - [ ] F6c. `flutter_inappwebview/example` macOS 建置
-      - [ ] F6d. `flutter_inappwebview_macos/example` macOS 建置
-- [ ] F7. 請示 commit（部署目標，與 UIScene 分開）
+- [x] F4. macOS 部署目標 10.15 → 12.0：跑 `flutter build macos --debug`，同樣複核 diff
+- [x] F5. 複核 migrator **未**動到套件層（`.podspec` / `Package.swift` 應維持 Stage 1 的值）
+- [x] F6. 建置驗證（此時尚未動 UIScene，確立乾淨基準）：
+      - [x] F6a. `flutter_inappwebview/example` iOS 模擬器建置
+      - [x] F6b. `flutter_inappwebview_ios/example` iOS 模擬器建置
+      - [x] F6c. `flutter_inappwebview/example` macOS 建置
+      - [x] F6d. `flutter_inappwebview_macos/example` macOS 建置
+- [x] F7. 請示 commit（部署目標，與 UIScene 分開）
 
 ### F-B：UIScene 採用（Q4/C，做法已依 Q16 大幅簡化）
 
@@ -101,29 +101,29 @@
 > 遷移器用 engine 內建的 `FlutterSceneDelegate`，不新增檔案、不碰 pbxproj。
 > Q14（`@main`）與 Q15（`FlutterImplicitEngineDelegate`）由遷移器的輸出自動達成。
 
-- [ ] F8. `flutter_inappwebview_ios/example`：**倚賴自動遷移**（AppDelegate 已驗證命中範本 #4）。
+- [x] F8. `flutter_inappwebview_ios/example`：**倚賴自動遷移**（AppDelegate 已驗證命中範本 #4）。
       跑 iOS 建置後複核遷移器實際寫入的 `Info.plist` 與 `AppDelegate.swift`
-- [ ] F9. `flutter_inappwebview/example`：**手動套用**（AppDelegate 不命中範本，只會印警告）
-      - [ ] F9a. `AppDelegate.swift` 改為遷移器的 `newSwiftAppDelegate` 形狀
+- [x] F9. `flutter_inappwebview/example`：**手動套用**（AppDelegate 不命中範本，只會印警告）
+      - [x] F9a. `AppDelegate.swift` 改為遷移器的 `newSwiftAppDelegate` 形狀
             （`@main` + `FlutterImplicitEngineDelegate` + `didInitializeImplicitFlutterEngine`）
-      - [ ] F9b. **保留** `flutter_downloader` 的既有註解區塊，不順手清理
-      - [ ] F9c. `Info.plist` 加 `UIApplicationSceneManifest`，內容與遷移器
+      - [x] F9b. **保留** `flutter_downloader` 的既有註解區塊，不順手清理
+      - [x] F9c. `Info.plist` 加 `UIApplicationSceneManifest`，內容與遷移器
             `uiscene_migration.dart:270-283` **逐鍵一致**（`UISceneDelegateClassName` = `FlutterSceneDelegate`）
-- [ ] F10. 複核兩個 example 的 UIScene 設定**彼此一致**（自動 vs 手動不得產生差異）
-- [ ] F11. UIScene 採用後重新建置兩個 iOS example
-- [ ] F12. 確認建置輸出不再出現 `flutter.dev/to/uiscene-migration` 警告
+- [x] F10. 複核兩個 example 的 UIScene 設定**彼此一致**（自動 vs 手動不得產生差異）
+- [x] F11. UIScene 採用後重新建置兩個 iOS example
+- [x] F12. 確認建置輸出不再出現 `flutter.dev/to/uiscene-migration` 警告
 - [ ] F13. 請示 commit（UIScene）
 
 ### F-C：實跑驗證（人工目視，不可用建置成功代替）
 
-- [ ] F14. iOS 模擬器實跑：WebView 顯示 / 捲動 / 縮放 / 鍵盤（keyboardAvoidance 為本 repo 既有功能）
+- [x] F14. iOS 模擬器實跑：WebView 顯示 / 捲動 / 縮放 / 鍵盤（keyboardAvoidance 為本 repo 既有功能）
       **UIScene 採用後的 app 生命週期需一併觀察**（背景/前景切換、視窗重建）
-- [ ] F15. macOS 實跑：**Impeller 預設下**的 WKWebView 呈現、視窗縮放、捲動
-- [ ] F16. `pod lib lint`（或 `pod install` + 部署目標一致性檢查）確認 podspec 無矛盾
+- [x] F15. macOS 實跑：**Impeller 預設下**的 WKWebView 呈現、視窗縮放、捲動
+- [x] F16. `pod lib lint`（或 `pod install` + 部署目標一致性檢查）確認 podspec 無矛盾
 
 ### F-D：收尾
 
-- [ ] F17. 更新 `plan.md` 的「已驗證 / 未驗證」表，明列**實體 iOS 裝置**為未驗證；
+- [x] F17. 更新 `plan.md` 的「已驗證 / 未驗證」表，明列**實體 iOS 裝置**為未驗證；
       UIScene 的結論措辭**不得**宣稱「為了 Xcode 27」（Q12 更正）
 - [ ] F18. 逐項請示 commit（Rule 17）
 

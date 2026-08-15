@@ -821,6 +821,65 @@ Stage 1 在 Windows 上記錄的錨點**全部複核通過**，無漂移：
 
 兩者分開驗證，才能在出問題時分辨是部署目標還是 UIScene 造成的。
 
+## Stage 2 結案（2026-08-15，macOS 環境）
+
+### 已驗證 / 未驗證（不得混為一談）
+
+| 項目 | 狀態 |
+| :--- | :--- |
+| `flutter_inappwebview_ios/example` iOS 模擬器建置 | ✅ 通過 |
+| `flutter_inappwebview_macos/example` macOS 建置 | ✅ 通過 |
+| `flutter_inappwebview/example` iOS 模擬器建置 | ✅ 通過 |
+| `flutter_inappwebview/example` macOS 建置 | ✅ 通過 |
+| 部署目標改寫（iOS 5 處→15.0、macOS 6 處→12.0、4 個 Podfile） | ✅ 由官方 migrator 自動完成 |
+| 套件層 `.podspec` / `Package.swift` 未被 migrator 越界改動 | ✅ 確認零變更 |
+| podspec / Package.swift / Pods 專案三方部署目標一致 | ✅ 各 12 處，無矛盾 |
+| UIScene 自動遷移（`flutter_inappwebview_ios/example`） | ✅ 命中範本，遷移器自動完成 |
+| UIScene 手動遷移（`flutter_inappwebview/example`） | ✅ 兩個 example 設定逐項一致 |
+| UIScene 遷移警告消失 | ✅ 重建後 0 筆 |
+| **iOS 模擬器實跑** | ✅ 啟動、WebView 渲染、捲動、全螢幕進出、前後景切換均正常 |
+| **macOS 實跑（Impeller 預設）** | ✅ 使用者目視確認呈現正常 |
+| **實體 iOS 裝置** | ❌ **未驗證**（本機未接裝置） |
+| **Xcode 27 對 UIScene 的強制性** | ❌ **未驗證**（本機為 26.6；且 SDK 查無此說法，見 Q12 更正） |
+| Linux / Windows 實跑目視 | ❌ 未驗證（沿用 Stage 1 的已知缺口） |
+
+### iOS 實跑的觀察細節
+
+模擬器 iPhone 17 Pro（iOS 26.5）實跑 `flutter_inappwebview/example`：
+
+- App 在 UIScene 生命週期下**正常啟動**——這是本次採用 UIScene 的核心驗證
+- WebView 正確載入 `https://flutter.dev/`，頁面完整渲染
+- 事件流完整：`onLoadStart` → `onNavigationResponse` → `onProgressChanged` → `onLoadStop`、
+  `onEnterFullscreen` / `onExitFullscreen`、`shouldInterceptFetchRequest`、
+  `onReceivedServerTrustAuthRequest`
+- 捲動正常；HOME 背景化後再前景化，**PID 不變（6862）且頁面捲動位置完整保留**，
+  證明 UIScene 的場景生命週期未造成重建或崩潰
+
+> **一度誤判的紀錄**：實跑中曾出現「Flutter UI 消失、只剩圖片與黑底」的畫面，
+> 初判為 UIScene 破壞了視窗設定。實際查事件記錄為 **`onEnterFullscreen`**——
+> 是 flutter.dev 頁面自身觸發全螢幕，WebView 正確回應並發出事件，**屬功能正常**。
+> 記錄於此，以免日後看到相同畫面再次誤判。
+
+### 本次 Stage 2 的四個 commit
+
+1. `a7c361ff` `fix(example)` — 子 example 的 platform_interface override（Q17）
+2. `cdb5e46d` `chore(example)` — 部署目標對齊 iOS 15 / macOS 12（F-A）
+3. `b9f4f99f` `docs(plan)` — Q12–Q18 決議與兩次結論更正
+4. （UIScene，F-B）
+
+### 附帶回報（非本計畫範圍，僅揭露）
+
+1. **`flutter_downloader` 不支援 SPM**：iOS 建置印出
+   `The following plugins do not support Swift Package Manager for ios: flutter_downloader`，
+   並註明 `This will become an error in a future version of Flutter`。
+   屬 example 的第三方依賴，非本套件，性質與 Q10 的 Built-in Kotlin 相同——現在只是警告。
+2. **本套件的 `Package.swift` 缺 `FlutterFramework` 依賴**：iOS 與 macOS 建置皆提示
+   `Plugin flutter_inappwebview_{ios,macos} has a Package.swift for ... but is missing a
+   dependency on FlutterFramework`。目前不影響建置，屬上游套件的 SPM 適配議題。
+3. **Flutter 建議 example 移除 CocoaPods 改採純 SPM**（`pod deintegrate`）。
+   屬獨立議題，明顯超出「基準對齊」範圍。
+4. **首次 SPM 整合可能出現一次性解析失敗**，處置方式見 Q18，**不需改任何檔案**。
+
 ## Git Completion Policy
 
 Commit 前逐項請示（Rule 17）。任務完成前將以 `git rebase main` 後
