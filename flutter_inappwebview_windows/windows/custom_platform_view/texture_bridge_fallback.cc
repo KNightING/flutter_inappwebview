@@ -129,8 +129,11 @@ namespace flutter_inappwebview_plugin
       return nullptr;
     }
 
-    if (last_frame_) {
+    // Skip the staging copy and the pixel conversion when the webview produced
+    // no new frame; |!pixel_buffer_| still forces the first one.
+    if (last_frame_ && (has_pending_frame_ || !pixel_buffer_)) {
       ProcessFrame(last_frame_);
+      has_pending_frame_ = false;
     }
 
     auto buffer = pixel_buffer_.get();

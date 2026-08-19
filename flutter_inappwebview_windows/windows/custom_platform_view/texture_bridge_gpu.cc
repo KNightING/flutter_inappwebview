@@ -85,8 +85,12 @@ namespace flutter_inappwebview_plugin
       return nullptr;
     }
 
-    if (last_frame_) {
+    // Skip the full-surface copy when the webview produced no new frame. The
+    // |!surface_| case still forces one: StopInternal drops the destination
+    // texture, so it has to be rebuilt on resume even without a new frame.
+    if (last_frame_ && (has_pending_frame_ || !surface_)) {
       ProcessFrame(last_frame_);
+      has_pending_frame_ = false;
     }
 
     if (surface_) {
