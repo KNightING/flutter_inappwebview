@@ -16,6 +16,39 @@ import '../web_storage/web_storage.dart';
 import '_static_channel.dart';
 import 'headless_in_app_webview.dart';
 
+/// Which of the native events that fire on every scrolled frame currently have a listener.
+///
+/// `onScrollChanged`, `onOverScrolled` and `onZoomScaleChanged` are emitted per frame while
+/// the page scrolls, so the native side is told up front which ones to send; a method channel
+/// round trip per frame for a callback nobody registered is pure overhead. The conditions here
+/// must stay identical to the ones guarding the matching `case` branches in
+/// [AndroidInAppWebViewController.handleMethod] — this is the same decision, taken before the
+/// message is sent instead of after it arrives.
+///
+/// Returns every event when [webviewParams] is null or an in-app browser is listening, since
+/// those paths dispatch regardless of the widget callbacks.
+List<String> enabledHighFrequencyEvents({
+  required PlatformWebViewCreationParams? webviewParams,
+  required bool hasInAppBrowserEventHandler,
+}) {
+  const allEvents = <String>[
+    'onScrollChanged',
+    'onOverScrolled',
+    'onZoomScaleChanged',
+  ];
+  if (webviewParams == null || hasInAppBrowserEventHandler) {
+    return allEvents;
+  }
+  return <String>[
+    if (webviewParams.onScrollChanged != null) 'onScrollChanged',
+    if (webviewParams.onOverScrolled != null) 'onOverScrolled',
+    if (webviewParams.onZoomScaleChanged != null ||
+        // ignore: deprecated_member_use_from_same_package
+        webviewParams.androidOnScaleChanged != null)
+      'onZoomScaleChanged',
+  ];
+}
+
 /// Object specifying creation parameters for creating a [AndroidInAppWebViewController].
 ///
 /// When adding additional fields make sure they can be null or have a default
@@ -3252,6 +3285,21 @@ class AndroidInAppWebViewController extends PlatformInAppWebViewController
     }
     _lastFrameworkKeyboardInset = inset;
     channel?.invokeMethod('setFrameworkKeyboardInset', {'height': inset});
+  }
+
+  /// Tells the native side which per-frame events to emit, so it can drop the rest before they
+  /// reach the channel (see [enabledHighFrequencyEvents]).
+  ///
+  /// The same list travels in the platform view's creation parameters; this resends it because
+  /// a `keepAlive` WebView can be reattached to a widget carrying a different set of callbacks
+  /// than the one that created it.
+  void syncEnabledHighFrequencyEvents() {
+    channel?.invokeMethod('setEnabledHighFrequencyEvents', {
+      'enabledHighFrequencyEvents': enabledHighFrequencyEvents(
+        webviewParams: webviewParams,
+        hasInAppBrowserEventHandler: _inAppBrowserEventHandler != null,
+      ),
+    });
   }
 
   @override

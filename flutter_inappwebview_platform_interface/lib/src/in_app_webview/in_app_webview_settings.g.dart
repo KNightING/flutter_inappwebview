@@ -1880,7 +1880,8 @@ class InAppWebViewSettings {
   ///- macOS WKWebView 11.3+ ([Official API - WKWebViewConfiguration.upgradeKnownHostsToHTTPS](https://developer.apple.com/documentation/webkit/wkwebviewconfiguration/3752243-upgradeknownhoststohttps))
   bool? upgradeKnownHostsToHTTPS;
 
-  ///Set to `false` to disable Flutter Hybrid Composition. The default value is `true`.
+  ///Set to `true` to render the WebView through Flutter Hybrid Composition instead of the
+  ///cheaper Texture Layer Hybrid Composition. The default value is `false`.
   ///Hybrid Composition is supported starting with Flutter v1.20+.
   ///
   ///**Officially Supported Platforms/Implementations**:
@@ -2178,7 +2179,7 @@ class InAppWebViewSettings {
     this.supportMultipleWindows = false,
     this.regexToCancelSubFramesLoading,
     this.regexToAllowSyncUrlLoading,
-    this.useHybridComposition = true,
+    this.useHybridComposition = false,
     this.keyboardAvoidance = true,
     this.useShouldInterceptRequest,
     this.useOnRenderProcessGone,

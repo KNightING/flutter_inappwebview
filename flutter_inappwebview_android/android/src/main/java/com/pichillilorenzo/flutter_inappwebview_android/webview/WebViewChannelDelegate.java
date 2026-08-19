@@ -60,8 +60,10 @@ import com.pichillilorenzo.flutter_inappwebview_android.webview.web_message.WebM
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -69,12 +71,33 @@ import io.flutter.plugin.common.MethodChannel;
 public class WebViewChannelDelegate extends ChannelDelegateImpl {
   static final String LOG_TAG = "WebViewChannelDelegate";
 
+  public static final String EVENT_ON_SCROLL_CHANGED = "onScrollChanged";
+  public static final String EVENT_ON_OVER_SCROLLED = "onOverScrolled";
+  public static final String EVENT_ON_ZOOM_SCALE_CHANGED = "onZoomScaleChanged";
+
   @Nullable
   private InAppWebView webView;
+
+  /**
+   * The events above fire on every scrolled frame, so Dart reports up front which of them it
+   * actually listens to and the rest are never sent. {@code null} means "Dart did not report",
+   * in which case everything is emitted -- that keeps every creation path this gate does not
+   * cover (in-app browser, headless, new windows) behaving exactly as before.
+   */
+  @Nullable
+  private Set<String> enabledHighFrequencyEvents;
 
   public WebViewChannelDelegate(@NonNull InAppWebView webView, @NonNull MethodChannel channel) {
     super(channel);
     this.webView = webView;
+  }
+
+  public void setEnabledHighFrequencyEvents(@Nullable List<String> eventNames) {
+    enabledHighFrequencyEvents = eventNames == null ? null : new HashSet<>(eventNames);
+  }
+
+  private boolean isHighFrequencyEventEnabled(@NonNull String eventName) {
+    return enabledHighFrequencyEvents == null || enabledHighFrequencyEvents.contains(eventName);
   }
 
   @Override
@@ -737,6 +760,12 @@ public class WebViewChannelDelegate extends ChannelDelegateImpl {
         }
         result.success(true);
         break;
+      case setEnabledHighFrequencyEvents:
+        // Resent whenever the platform view is (re)attached: a keepAlive webview can be handed
+        // to a widget carrying a different set of callbacks than the one that created it.
+        setEnabledHighFrequencyEvents((List<String>) call.argument("enabledHighFrequencyEvents"));
+        result.success(true);
+        break;
     }
   }
 
@@ -763,10 +792,11 @@ public class WebViewChannelDelegate extends ChannelDelegateImpl {
   public void onScrollChanged(int x, int y) {
     MethodChannel channel = getChannel();
     if (channel == null) return;
+    if (!isHighFrequencyEventEnabled(EVENT_ON_SCROLL_CHANGED)) return;
     Map<String, Object> obj = new HashMap<>();
     obj.put("x", x);
     obj.put("y", y);
-    channel.invokeMethod("onScrollChanged", obj);
+    channel.invokeMethod(EVENT_ON_SCROLL_CHANGED, obj);
   }
 
   public void onDownloadStarting(DownloadStartRequest downloadStartRequest) {
@@ -784,12 +814,13 @@ public class WebViewChannelDelegate extends ChannelDelegateImpl {
   public void onOverScrolled(int scrollX, int scrollY, boolean clampedX, boolean clampedY) {
     MethodChannel channel = getChannel();
     if (channel == null) return;
+    if (!isHighFrequencyEventEnabled(EVENT_ON_OVER_SCROLLED)) return;
     Map<String, Object> obj = new HashMap<>();
     obj.put("x", scrollX);
     obj.put("y", scrollY);
     obj.put("clampedX", clampedX);
     obj.put("clampedY", clampedY);
-    channel.invokeMethod("onOverScrolled", obj);
+    channel.invokeMethod(EVENT_ON_OVER_SCROLLED, obj);
   }
 
   public void onContextMenuActionItemClicked(int itemId, String itemTitle) {
@@ -1145,10 +1176,11 @@ public class WebViewChannelDelegate extends ChannelDelegateImpl {
   public void onZoomScaleChanged(float oldScale, float newScale) {
     MethodChannel channel = getChannel();
     if (channel == null) return;
+    if (!isHighFrequencyEventEnabled(EVENT_ON_ZOOM_SCALE_CHANGED)) return;
     Map<String, Object> obj = new HashMap<>();
     obj.put("oldScale", oldScale);
     obj.put("newScale", newScale);
-    channel.invokeMethod("onZoomScaleChanged", obj);
+    channel.invokeMethod(EVENT_ON_ZOOM_SCALE_CHANGED, obj);
   }
 
   public static class SafeBrowsingHitCallback extends BaseCallbackResultImpl<SafeBrowsingResponse> {

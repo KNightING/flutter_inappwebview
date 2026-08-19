@@ -80,6 +80,13 @@ public class FlutterWebView implements PlatformWebView {
     findInteractionController.prepare();
 
     webView.prepare();
+
+    // Absent for any caller that predates the gate, and channelDelegate then keeps emitting
+    // everything -- see WebViewChannelDelegate#enabledHighFrequencyEvents.
+    List<String> enabledHighFrequencyEvents = (List<String>) params.get("enabledHighFrequencyEvents");
+    if (enabledHighFrequencyEvents != null && webView.channelDelegate != null) {
+      webView.channelDelegate.setEnabledHighFrequencyEvents(enabledHighFrequencyEvents);
+    }
   }
 
   @Override

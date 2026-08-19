@@ -130,7 +130,9 @@ public class InAppWebViewSettings implements ISettings<InAppWebViewInterface> {
   public Boolean useShouldInterceptRequest = false;
   public Boolean useOnRenderProcessGone = false;
   public Boolean disableDefaultErrorPage = false;
-  public Boolean useHybridComposition = true;
+  // Mirrors the Dart-side default: Texture Layer Hybrid Composition. Keeping the two in step
+  // matters because this value also decides whether InputAwareWebView installs its IME proxy.
+  public Boolean useHybridComposition = false;
   // Consume the IME window insets before they reach the WebView so Chromium does not run its own
   // ScrollFocusedEditableIntoView, then perform the shift here instead.
   public Boolean keyboardAvoidance = true;

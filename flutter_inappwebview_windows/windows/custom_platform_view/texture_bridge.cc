@@ -128,6 +128,10 @@ namespace flutter_inappwebview_plugin
       if (SUCCEEDED(frame->get_Surface(frame_surface.put()))) {
         last_frame_ =
           TryGetDXGIInterfaceFromObject<ID3D11Texture2D>(frame_surface);
+        // Set even for a dropped frame: the fps limit governs how often Flutter is *notified*,
+        // and a drop must not leave the newest content unpresented when Flutter composites
+        // anyway for some other reason.
+        has_pending_frame_ = true;
         has_frame = !ShouldDropFrame();
       }
     }

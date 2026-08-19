@@ -54,6 +54,11 @@ namespace flutter_inappwebview_plugin
     FrameAvailableCallback frame_available_;
     SurfaceSizeChangedCallback surface_size_changed_;
     std::atomic<bool> needs_update_ = false;
+    // Whether |last_frame_| holds a frame that has not been processed yet.
+    // Flutter asks for the texture on every composited frame, including ones
+    // driven by unrelated animations; without this the webview would be copied
+    // again even when it produced nothing new.
+    bool has_pending_frame_ = false;
     winrt::com_ptr<ID3D11Texture2D> last_frame_;
     std::optional<std::chrono::high_resolution_clock::time_point>
       last_frame_timestamp_;

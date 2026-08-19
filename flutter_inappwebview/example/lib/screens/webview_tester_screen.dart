@@ -41,9 +41,15 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
   double _webViewHeight = 320;
   static const double _minWebViewHeight = 160;
   static const double _minTabsHeight = 220;
-  static const double _dividerHeight = 6;
+  // Tall enough to host the drag grip and the collapse chevron side by side.
+  static const double _dividerHeight = 24;
   static const double _minChromeHeight = 140;
   bool _settingsExpanded = false;
+  bool _tabsCollapsed = false;
+  // Keeps the WebView subtree alive across a layout-branch swap: with a GlobalKey the
+  // element is re-parented instead of destroyed, so the platform view is not recreated
+  // and the page does not reload.
+  final GlobalKey _webViewKey = GlobalKey();
 
   bool get _shouldShowStopButton {
     return _progress > 0 && _progress < 1.0 && !_forceShowReloadAfterStop;
@@ -67,6 +73,11 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
     final settingsManager = context.watch<SettingsManager>();
 
     return Scaffold(
+      // keyboardAvoidance keeps the focused input visible from inside the plugin, but only
+      // if the host stops resizing its body (see wiki/features/keyboard-avoidance.md).
+      // Letting it shrink also pushed the available height below minRequiredHeight below,
+      // which swapped the layout branch and tore the WebView down on every keyboard show.
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('WebView Tester'),
         actions: [
@@ -129,8 +140,9 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
               onEditEnvironmentProfile: () =>
                   Navigator.pushNamed(context, '/environment-settings'),
             ),
-          Container(height: _dividerHeight, color: Colors.grey.shade300),
-          SizedBox(height: _minTabsHeight, child: _buildBottomTabs()),
+          _buildResizeHandle(onDrag: null),
+          if (!_tabsCollapsed)
+            SizedBox(height: _minTabsHeight, child: _buildBottomTabs()),
         ],
       ),
     );
@@ -146,9 +158,10 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
         final profileCardHeight = isMobile
             ? (_settingsExpanded ? 100.0 : 40.0)
             : 120.0;
+        final tabsHeight = _tabsCollapsed ? 0.0 : _minTabsHeight;
         final maxWebViewHeight =
             constraints.maxHeight -
-            _minTabsHeight -
+            tabsHeight -
             _dividerHeight -
             profileCardHeight;
         final effectiveMax = maxWebViewHeight < _minWebViewHeight
@@ -160,7 +173,13 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
 
         return Column(
           children: [
-            _buildWebViewWithProgress(settingsManager, height: webViewHeight),
+            // Collapsed, the WebView takes whatever is left via Expanded rather than a
+            // computed height -- profileCardHeight above is only an estimate, and a fixed
+            // height derived from it would overflow the column when the estimate is off.
+            if (_tabsCollapsed)
+              Expanded(child: _buildWebViewWithProgress(settingsManager))
+            else
+              _buildWebViewWithProgress(settingsManager, height: webViewHeight),
             if (isMobile)
               _buildCollapsibleSettings()
             else
@@ -172,41 +191,75 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
                     Navigator.pushNamed(context, '/environment-settings'),
               ),
             _buildResizeHandle(
-              onDrag: (delta) {
-                setState(() {
-                  _webViewHeight = (_webViewHeight + delta)
-                      .clamp(_minWebViewHeight, effectiveMax)
-                      .toDouble();
-                });
-              },
+              onDrag: _tabsCollapsed
+                  ? null
+                  : (delta) {
+                      setState(() {
+                        _webViewHeight = (_webViewHeight + delta)
+                            .clamp(_minWebViewHeight, effectiveMax)
+                            .toDouble();
+                      });
+                    },
             ),
-            Expanded(child: _buildBottomTabs()),
+            if (!_tabsCollapsed) Expanded(child: _buildBottomTabs()),
           ],
         );
       },
     );
   }
 
-  Widget _buildResizeHandle({required ValueChanged<double> onDrag}) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeRow,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
-        child: Container(
-          height: _dividerHeight,
-          color: Colors.grey.shade300,
-          child: Center(
-            child: Container(
-              width: 40,
-              height: 2,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade600,
-                borderRadius: BorderRadius.circular(2),
+  /// Divider between the WebView and the bottom tabs: drags to resize and carries the
+  /// control that collapses the tabs away so the WebView can use the full height.
+  ///
+  /// [onDrag] is null while the tabs are collapsed, since there is nothing left to resize.
+  Widget _buildResizeHandle({required ValueChanged<double>? onDrag}) {
+    final grip = Container(
+      width: 40,
+      height: 2,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade600,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+
+    return Container(
+      height: _dividerHeight,
+      color: Colors.grey.shade300,
+      child: Row(
+        children: [
+          Expanded(
+            child: MouseRegion(
+              cursor: onDrag == null
+                  ? SystemMouseCursors.basic
+                  : SystemMouseCursors.resizeRow,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onVerticalDragUpdate: onDrag == null
+                    ? null
+                    : (details) => onDrag(details.delta.dy),
+                child: Center(child: grip),
               ),
             ),
           ),
+          _buildTabsCollapseButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabsCollapseButton() {
+    return SizedBox(
+      width: 44,
+      height: _dividerHeight,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 18,
+        tooltip: _tabsCollapsed ? 'Show test panel' : 'Hide test panel',
+        icon: Icon(
+          _tabsCollapsed ? Icons.expand_less : Icons.expand_more,
+          color: Colors.grey.shade700,
         ),
+        onPressed: () => setState(() => _tabsCollapsed = !_tabsCollapsed),
       ),
     );
   }
@@ -233,11 +286,15 @@ class _WebViewTesterScreenState extends State<WebViewTesterScreen>
       ],
     );
 
+    // The key goes on a wrapper rather than on the InAppWebView itself, whose own ValueKey
+    // deliberately changes with the settings revision to force a rebuild.
+    final keptAlive = KeyedSubtree(key: _webViewKey, child: stack);
+
     if (height != null) {
-      return SizedBox(height: height, child: stack);
+      return SizedBox(height: height, child: keptAlive);
     }
 
-    return stack;
+    return keptAlive;
   }
 
   /// Combined URL bar and navigation controls - optimized for mobile
