@@ -1162,7 +1162,8 @@ because there isn't any way to make the website data store non-persistent for th
   @SupportedPlatforms(platforms: [AndroidPlatform()])
   String? regexToAllowSyncUrlLoading;
 
-  ///Set to `false` to disable Flutter Hybrid Composition. The default value is `true`.
+  ///Set to `true` to render the WebView through Flutter Hybrid Composition instead of the
+  ///cheaper Texture Layer Hybrid Composition. The default value is `false`.
   ///Hybrid Composition is supported starting with Flutter v1.20+.
   @SupportedPlatforms(
     platforms: [
@@ -3445,7 +3446,7 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
     this.supportMultipleWindows = false,
     this.regexToCancelSubFramesLoading,
     this.regexToAllowSyncUrlLoading,
-    this.useHybridComposition = true,
+    this.useHybridComposition = false,
     this.keyboardAvoidance = true,
     this.useShouldInterceptRequest,
     this.useOnRenderProcessGone,

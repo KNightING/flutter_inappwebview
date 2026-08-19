@@ -320,11 +320,13 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
       }
     }
 
+    // Defaults to Texture Layer Hybrid Composition: Hybrid Composition puts the WebView in the
+    // real view hierarchy and makes Flutter pay for the composition of everything drawn over it.
     var useHybridComposition =
         (params.initialSettings != null
             ? initialSettings.useHybridComposition
             : params.initialOptions?.android.useHybridComposition) ??
-        true;
+        false;
 
     return PlatformViewLink(
       key: params.key,
