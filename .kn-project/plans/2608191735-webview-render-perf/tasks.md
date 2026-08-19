@@ -45,13 +45,13 @@
 
 > 以下每一項都必須在**實體 Android 裝置**上以真手指與真輸入法確認；模擬器與 `adb input` 測不出 IME 代理路徑。
 
-- [ ] 中文輸入法（注音／拼音）在網頁輸入框可正常 composing、選字、送出
-- [ ] `keyboardAvoidance` 仍能讓焦點輸入框保持可見（本 fork 旗艦功能，最高風險項）
-- [ ] 鍵盤收起後版面正確還原
-- [ ] 頁面內影片播放正常（TLHC 對 `SurfaceView` 的行為差異）
-- [ ] pull-to-refresh 手勢正常
-- [ ] 長按選單 / 文字選取正常
-- [ ] 捲動流暢度目視比對（改動前後同一頁面）
+- [x] 中文輸入法（注音／拼音）在網頁輸入框可正常 composing、選字、送出
+- [x] `keyboardAvoidance` 仍能讓焦點輸入框保持可見（本 fork 旗艦功能，最高風險項）
+- [x] 鍵盤收起後版面正確還原
+- [x] 頁面內影片播放正常（TLHC 對 `SurfaceView` 的行為差異）
+- [ ] pull-to-refresh 手勢正常 — **尚未驗證**，Phase 5 唯一未完成項
+- [x] 長按選單 / 文字選取正常
+- [x] 捲動流暢度目視比對（改動前後同一頁面）
 
 ## Phase 6 — 收尾
 
@@ -134,3 +134,18 @@ F1/F2 正是 commit message 點名的 keepAlive 重掛情境，確認 creationPa
 （`ThreadPoolForeg`），發生在 flutter.dev 載入並建立 `OMX.MTK.VIDEO.DECODER.AVC` 之後。
 隨後以「啟動後靜置 45 秒不操作」與「單獨點收合鈕」兩個對照皆未重現，收合、展開、鍵盤各項
 操作全程同一個 pid 存活。成因未確認，記錄備查，不列為本次變更的問題。
+
+### Phase 5 — TLHC 預設切換實機驗證（U2 / Android 10 API 29，2026-08-19）
+
+由使用者在實體裝置上以真手指與真輸入法驗證，載體為含 Phase 7 修正的 release build
+（`app-release.apk`，23:34 安裝）。
+
+七項中 **六項通過**：中文輸入法 composing／選字／送出、`keyboardAvoidance`、鍵盤收起後
+版面還原、頁面內影片播放、長按選單／文字選取、捲動流暢度。
+
+其中 `keyboardAvoidance` 是本計畫唯一刻意行為變更（#5）風險最高的一項：`useHybridComposition`
+翻為 `false` 會啟用 `InputAwareWebView` 中至今對預設使用者休眠的 IME 代理路徑
+（`InputAwareWebView.java:209` / `:230` 的 `if (useHybridComposition) return;` 兩處守衛）。
+實機確認該路徑啟用後行為正常，是 #5 得以成立的關鍵佐證。
+
+**pull-to-refresh 尚未驗證**，為 Phase 5 唯一未完成項。
