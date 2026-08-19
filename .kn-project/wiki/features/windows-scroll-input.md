@@ -77,6 +77,7 @@ flowchart TD
   （滾輪路徑的修復與根因）、
   [2608152335-windows-trackpad-pointer-input](../../archive/2608152335-windows-trackpad-pointer-input.md)
   （觸控板改走合成觸控）
+- 同檔案的另一條路徑（幾何上報與 texture 更新）：[Windows 視圖幾何與 texture 更新](windows-view-geometry.md)
 - 上游未修的相關 issue：`https://github.com/pichillilorenzo/flutter_inappwebview/issues/2511`、
   `https://github.com/pichillilorenzo/flutter_inappwebview/issues/2503`
 - Flutter 觸控板手勢語意：`https://docs.flutter.dev/release/breaking-changes/trackpad-gestures`
