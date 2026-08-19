@@ -12,7 +12,7 @@
 - [x] `custom_platform_view.dart`：`_reportSurfaceSize` / `_reportWidgetPosition` 加入上次值快取與 `force` 參數
 - [x] `custom_platform_view.dart`：去重改為只套用於 `onPointerDown`（`_reportGeometryIfMoved`），其餘路徑照送——原 `force` 設計經實測推翻，見 plan.md Key Decisions
 - [x] Windows example 建置並實跑：初始渲染、點擊導覽、滾輪捲動、視窗縮放與移動皆正常（2026-08-19 以 computer-use 目視確認）
-- [ ] Windows example 待人工補測：最小化後還原、切分頁（生命週期路徑）
+- [x] Windows example 人工補測：最小化後還原、切分頁（生命週期路徑）——2026-08-19 由使用者實測確認
 
 ## Phase 2 — iOS gesture 掃描降頻（#2）
 
