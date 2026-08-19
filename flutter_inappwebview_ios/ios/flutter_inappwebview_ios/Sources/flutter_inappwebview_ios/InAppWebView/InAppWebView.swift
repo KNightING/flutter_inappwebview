@@ -252,6 +252,11 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
     // It is called frequently during a page load (particularly on progress changes and URL changes).
     // As of iOS 12, WKContentView gesture setup is async, but it has been called by the time
     // the webview is ready to load an URL. After this has happened, we can override the gesture.
+    /// Call this only from navigation-related KVO branches (`estimatedProgress`, `url`).
+    /// WebKit reinstalls its gesture handlers on navigation, and `estimatedProgress` fires
+    /// several times per load, so those two cover it. Calling it from `contentOffset` too
+    /// meant re-running the recognizer scan below on every scrolled frame -- and that scan
+    /// builds each recognizer's `description` string just to substring-match it.
     func replaceGestureHandlerIfNeeded() {
         DispatchQueue.main.async {
             if self.gestureRecognizerWithDescriptionFragment("InAppWebView") == nil {
@@ -870,11 +875,13 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
             let progress = Int(estimatedProgress * 100)
             channelDelegate?.onProgressChanged(progress: progress)
             inAppBrowserDelegate?.didChangeProgress(progress: estimatedProgress)
+            replaceGestureHandlerIfNeeded()
         } else if keyPath == #keyPath(WKWebView.url) && change?[.newKey] is URL {
             initializeWindowIdJS()
             let newUrl = change?[NSKeyValueChangeKey.newKey] as? URL
             channelDelegate?.onUpdateVisitedHistory(url: newUrl?.absoluteString, isReload: nil)
             inAppBrowserDelegate?.didUpdateVisitedHistory(url: newUrl)
+            replaceGestureHandlerIfNeeded()
         } else if keyPath == #keyPath(WKWebView.title) && change?[.newKey] is String {
             let newTitle = change?[.newKey] as? String
             channelDelegate?.onTitleChanged(title: newTitle)
@@ -932,7 +939,6 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
                 }
             }
         }
-        replaceGestureHandlerIfNeeded()
     }
     
     public func initializeWindowIdJS() {
