@@ -366,6 +366,10 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
                   [],
               'pullToRefreshSettings': pullToRefreshSettings,
               'keepAliveId': this.params.keepAlive?.id,
+              'enabledHighFrequencyEvents': enabledHighFrequencyEvents(
+                webviewParams: this.params,
+                hasInAppBrowserEventHandler: false,
+              ),
             },
           )
           ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
@@ -413,6 +417,9 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
         webviewParams: params,
       ),
     );
+    // The creation parameters already carried this, but a keepAlive WebView outlives the widget
+    // that created it and can be reattached to one with a different set of callbacks.
+    _controller?.syncEnabledHighFrequencyEvents();
     // keyboardAvoidance defaults to true, so an absent setting still means enabled. Below API 30
     // the native side depends on this reporting for the keyboard height; above it the value is
     // ignored, so no OS version check is needed here.

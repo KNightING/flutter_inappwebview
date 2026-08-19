@@ -89,4 +89,5 @@ public enum WebViewChannelDelegateMethods {
   saveState,
   restoreState,
   setFrameworkKeyboardInset,
+  setEnabledHighFrequencyEvents,
 }
