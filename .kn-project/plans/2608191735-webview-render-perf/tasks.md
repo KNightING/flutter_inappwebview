@@ -19,8 +19,9 @@
 - [x] `InAppWebView.swift`：把 `observeValue` 末端的 `replaceGestureHandlerIfNeeded()` 移入 `estimatedProgress` 與 `url` 兩個導覽相關分支
 - [x] iOS example 實跑：長按選單（連結、文字、圖片）在首次載入、多次導覽、返回上一頁後皆正常
       （2026-08-19 iPhone 17 模擬器 / iOS 26.4，見下方驗證紀錄）
-- [ ] iOS example 實跑：捲動流暢度目視比對（同一頁面改動前後）
-      — 模擬器不具參考性（無真實 GPU/CPU 對應），保留給實機；捲動功能本身已確認正常
+- [x] iOS example 實跑：捲動流暢度目視比對（同一頁面改動前後）
+      — 模擬器不具參考性，改於實體 iPad（iOS 26.6，release build）確認；使用者判定順暢。
+        **未做改動前後的 A/B 對照**（使用者判斷絕對表現已足夠），故本項為絕對評估而非比對
 
 ## Phase 3 — Android 高頻事件 gating（#1）
 
@@ -56,7 +57,10 @@
 ## Phase 6 — 收尾
 
 - [x] `flutter analyze` 通過
-- [ ] 五項變更逐項覆核未超出 `## Impact Files` 所列範圍（delta 極小鐵則）
+- [x] 五項變更逐項覆核未超出 `## Impact Files` 所列範圍（delta 極小鐵則）
+      — 15 個變更檔中 13 個已列；`WebViewChannelDelegateMethods.java` 與
+        `in_app_webview_settings.g.dart` 原先漏列，皆為已核准決策的直接衍生，已補列於
+        `plan.md` 的「Phase 6 覆核補列」。無範圍外變更。
 - [ ] 更新 `plan.md` 的 `- Status:` 與 `- Completed:`
 
 ## Phase 7 — example app 驗證載體修復（#6，迭代追加）
@@ -149,3 +153,15 @@ F1/F2 正是 commit message 點名的 keepAlive 重掛情境，確認 creationPa
 實機確認該路徑啟用後行為正常，是 #5 得以成立的關鍵佐證。
 
 **pull-to-refresh 尚未驗證**，為 Phase 5 唯一未完成項。
+
+### Phase 2 — iOS 捲動流暢度（SLD iPad / iOS 26.6，2026-08-20）
+
+以命令列覆寫簽章的方式建置 release 並安裝到實體 iPad（team `D6UC4DZGTG`，bundle id
+`com.knighting.flutterinappwebview.example`）。使用者實測判定捲動順暢，無明顯卡頓。
+
+**限制**：未建置 `main` 版本做改動前後對照，故本項是「改動後表現可接受」的絕對評估，
+不是量化或比對結果。若日後需要嚴謹的 A/B，需另建一份還原 `InAppWebView.swift` 的版本。
+
+**簽章備註**：`project.pbxproj` 在建置期間被暫時改寫（team 5 處、bundle id 4 處，皆為
+上游作者的值），建置完成後已 `git checkout` 還原，未進入任何 commit。所用為免費 Personal
+Team，provisioning profile 七天後（2026-08-27 前後）到期，屆時 App 需重簽重裝。

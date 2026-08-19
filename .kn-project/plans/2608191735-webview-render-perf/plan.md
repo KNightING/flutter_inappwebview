@@ -265,6 +265,22 @@ example app 未遵守自己的文件。**設為 `false` 同時修正文件違規
   — `_buildWebViewWithProgress()`，若採 Q7 的 GlobalKey 方案，key 加在此處建立的
   `InAppWebView` 上。
 
+### Phase 6 覆核補列（2026-08-20）
+
+以 `git diff main...HEAD --name-only` 逐項比對後，發現兩個實際變更的檔案原先未列入本節。
+兩者皆為已核准決策的直接衍生，非範圍外的擅自擴張，補列於此：
+
+- `flutter_inappwebview_android/android/src/main/java/com/pichillilorenzo/flutter_inappwebview_android/webview/WebViewChannelDelegateMethods.java`
+  — Q1 決議採用內部 method channel 重新同步，必須在此 enum 補一個 `setEnabledHighFrequencyEvents`
+  成員（+1 行）。規劃時只列了 `WebViewChannelDelegate.java`，漏了它的方法列舉。
+- `flutter_inappwebview_platform_interface/lib/src/in_app_webview/in_app_webview_settings.g.dart`
+  — #5 翻預設值後由 build_runner 重新產生的檔案。`tasks.md` Phase 4 已有「確認 `.g.dart`
+  產生檔是否需同步重新產生」一項，但本節漏列該產生檔本身。
+
+反向核對：`InAppWebView.java` 與 `InputAwareWebView.java` 有列入本節但**未被修改**——
+前者是 #1 的成本來源（gate 依計畫實作在 `WebViewChannelDelegate` 而非此處），後者計畫即
+明載「不修改」。兩者皆符合預期，非遺漏。
+
 ### 新增
 
 - 無（皆為既有檔案的行為修正）。
