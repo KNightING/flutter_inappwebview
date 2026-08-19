@@ -59,6 +59,22 @@
 - [ ] 五項變更逐項覆核未超出 `## Impact Files` 所列範圍（delta 極小鐵則）
 - [ ] 更新 `plan.md` 的 `- Status:` 與 `- Completed:`
 
+## Phase 7 — example app 驗證載體修復（#6，迭代追加）
+
+> 只動 `flutter_inappwebview/example/lib/screens/webview_tester_screen.dart`，
+> 不觸碰任何套件程式碼，因此不影響 #1~#4 的「零對外行為變更」驗收。
+> 目的是讓 Phase 5 的實機驗證有可用載體，故須排在 Phase 5 之前完成。
+
+- [x] `webview_tester_screen.dart:69`：`Scaffold` 加上 `resizeToAvoidBottomInset: false`
+      （同時修正未遵守 `keyboard-avoidance.md:11` 使用端契約的問題）
+- [x] （依 Q7 決議）為 `_buildWebViewWithProgress()` 的 `InAppWebView` 掛上 state 層級 `GlobalKey`
+      （實作為包一層 `KeyedSubtree`，避免動到 `InAppWebView` 自身隨 settings revision 變動的 `ValueKey`）
+- [x] （依 Q6 決議）底部測試面板加入收合機制，`_buildResizableContent()` 的 `effectiveMax`
+      計算納入收合狀態
+- [x] `flutter analyze` 通過（本檔僅剩 1 項既有 `prefer_const_declarations`，非本次引入）
+- [x] 實機複驗：點網頁輸入框後鍵盤停留、WebView 不重載
+- [x] 實機複驗：底部面板收合後網頁可視區取得全高
+
 ---
 
 ## 驗證紀錄（2026-08-19）
@@ -102,3 +118,19 @@ F1/F2 正是 commit message 點名的 keepAlive 重掛情境，確認 creationPa
 過程中一度以為出現回歸，實為測試序列造成：前一次長按留下的 WebKit 預覽選單未關閉會吃掉下一次
 長按。改以「長按文字」作為 app 啟動後的第一個動作對照，branch 與 `main`（僅將該 .swift 還原）
 行為一致。
+
+### Phase 7 — example app 驗證載體（U2 / Android 10 API 29，2026-08-19）
+
+裝置邏輯尺寸 384×640（200dpi，DPR 1.25），body ≈ 560，`minRequiredHeight = 544`（`_dividerHeight`
+由 6 調為 24 以容納收合鈕後的值）。
+
+- **URL 列聚焦** — 鍵盤浮在底部面板之上，WebView 大小與位置完全未變。
+- **網頁輸入框聚焦（DuckDuckGo）** — 鍵盤彈出後停留，可正常輸入 `hello`，WebView 未重建、未重載。
+- **收合底部面板** — WebView 取得近乎全高；`hello` 仍留在輸入框內，**證明頁面未重載**，
+  `KeyedSubtree` + `GlobalKey` 的 re-parenting 有效。
+- **收合狀態下再次聚焦輸入框** — 頁面自動上移使焦點輸入框停在鍵盤上方，`keyboardAvoidance` 正常。
+
+**一次未重現的 crash（非本次變更）**：首次實跑時觀察到一次 Chromium 原生 SIGSEGV
+（`ThreadPoolForeg`），發生在 flutter.dev 載入並建立 `OMX.MTK.VIDEO.DECODER.AVC` 之後。
+隨後以「啟動後靜置 45 秒不操作」與「單獨點收合鈕」兩個對照皆未重現，收合、展開、鍵盤各項
+操作全程同一個 pid 存活。成因未確認，記錄備查，不列為本次變更的問題。

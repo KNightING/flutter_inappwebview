@@ -19,9 +19,15 @@
 | 3 | Windows | texture 沒有新影格時不再重複做全螢幕 GPU 複製 | 不變 |
 | 4 | Windows | size / position 未變化時不再重設 WebView2 bounds | 不變 |
 | 5 | Android | `useHybridComposition` 預設由 `true` 改為 `false`（TLHC） | **變更**（見 E 節風險） |
+| 6 | example | 修掉兩個擋住 #5 實機驗證的 example app 缺陷 | 僅 example，套件不變 |
 
 **共同前提**：#1~#4 以「零對外行為變更」為驗收條件；#5 是使用者明確拍板的行為變更，
 其風險於 E 節完整揭露。
+
+**第 6 項為迭代追加（2026-08-19）**：#5 的實機驗證在 example app 上做不下去——鍵盤一彈出
+WebView 就重建、網頁可視區又被底部面板壓到只剩兩百多 px。兩者皆為 example app 既有缺陷，
+與 #1~#5 無關（已以 HC/TLHC 對照實測排除），但不修就沒有可用的驗證載體。
+**只動 `example/`，不動任何套件程式碼**，因此 #1~#4 的「零對外行為變更」驗收不受影響。
 
 ## Architecture
 
@@ -126,6 +132,46 @@ WebKit 重建 long-press gesture 的時機就是導覽（見程式碼既有註�
   區分（TLHC 本就走 texture，強設 layer type 沒有意義），但要知道這個副作用。
 - TLHC 對 `SurfaceView`（影片、地圖）與 pull-to-refresh 的行為與 HC 不同，需實測。
 
+### F. example app 驗證載體修復（#6，迭代追加）
+
+本項不動套件，只修 `flutter_inappwebview/example` 的 WebView Tester 畫面。
+
+#### F-1. 鍵盤彈出導致 WebView 重建
+
+`WebViewTesterScreen.build()` 以 `LayoutBuilder` 在兩棵**結構不同**的樹之間切換：
+
+```
+minRequiredHeight = _minWebViewHeight(160) + _minTabsHeight(220)
+                  + _dividerHeight(6) + _minChromeHeight(140) = 526
+
+constraints.maxHeight < 526 → _buildScrollableBody()
+                              SingleChildScrollView → Column → SizedBox → InAppWebView
+                            → _buildStandardBody()
+                              Column → Expanded → LayoutBuilder → Column → InAppWebView
+```
+
+兩個分支的祖先鏈不同，Flutter 無法比對 element，`InAppWebView` 會被 unmount 再 mount，
+platform view 隨之銷毀重建 → 頁面重載 → 焦點消失 → 鍵盤收起。
+
+`Scaffold` 未宣告 `resizeToAvoidBottomInset: false`（預設 `true`），因此鍵盤彈出時 body
+高度真的會縮，跨過 526 這條線。實測裝置 U2：200dpi → DPR 1.25 → 邏輯 384×640，
+body ≈ 560（餘裕僅 34px），鍵盤佔約 250 → 310 < 526，必然觸發切換。
+
+`keyboard-avoidance.md:11` 已載明使用端必須宣告 `resizeToAvoidBottomInset: false`，
+example app 未遵守自己的文件。**設為 `false` 同時修正文件違規與症狀本身**。
+
+已排除的假設：以 `kb_probe_main.dart` 在同一台裝置做 HC ↔ TLHC 對照，兩個模式下鍵盤皆
+正常停留、無重載（`loadStop` 計數不變），故與 #5 的 TLHC 翻轉無關。
+
+#### F-2. 底部測試面板無法縮小
+
+`_minTabsHeight = 220` 是硬下限，拖曳把手的上限為
+`effectiveMax = maxHeight − 220 − 6 − profileCardHeight`，且面板無收合機制。
+同一台裝置實算：`560 − 220 − 6 − 40 = 294`，再扣控制列，網頁可視區僅剩兩百多 px。
+
+修法為新增「收合底部面板」開關：收合時面板高度歸零（僅保留展開鈕），WebView 取得
+其餘全部高度；展開時維持既有行為與既有下限。
+
 ## Cross-Repo Scope
 
 無（單一 repo）。
@@ -203,6 +249,22 @@ WebKit 重建 long-press gesture 的時機就是導覽（見程式碼既有註�
 - `.../in_app_webview/InputAwareWebView.java:209` / `:230`
   — `if (useHybridComposition) return;` 兩處守衛，證明翻預設會啟用休眠的 IME 代理路徑。
 
+### F. example app 驗證載體（#6，迭代追加）
+
+- `flutter_inappwebview/example/lib/screens/webview_tester_screen.dart:69`
+  — `Scaffold(` 未宣告 `resizeToAvoidBottomInset`，取預設 `true`，是 F-1 的直接成因。
+- `.../webview_tester_screen.dart:83`
+  — `LayoutBuilder` 的 `useScroll` 判斷式與兩個分支的切換點。
+- `.../webview_tester_screen.dart:44`
+  — `static const double _minTabsHeight = 220;`，F-2 的硬下限。
+- `.../webview_tester_screen.dart:139`
+  — `_buildResizableContent()`，`effectiveMax` 計算處，收合狀態需納入。
+- `.../webview_tester_screen.dart:190`
+  — `_buildResizeHandle()`，收合開關預定掛載處。
+- `.../webview_tester_screen.dart:215`
+  — `_buildWebViewWithProgress()`，若採 Q7 的 GlobalKey 方案，key 加在此處建立的
+  `InAppWebView` 上。
+
 ### 新增
 
 - 無（皆為既有檔案的行為修正）。
@@ -259,8 +321,38 @@ iOS 有完全相同的模式（`InAppWebView.swift:2705` 的 `channelDelegate?.o
 - [ ] 選項 B：僅做建置與 example 目視，接受未驗證風險
 - **決議**：選項 A　狀態：✅ 已確認
 
+### Q6. #6 的底部面板收合機制採哪一種？ — 影響範圍：`example` 單檔 ✅ 已確認
+
+- [x] **A. 新增收合開關**（建議）— 在 resize handle 上加一個 chevron；收合時底部面板高度歸零，
+      WebView 取得其餘全部高度，展開時完全維持既有行為與 `_minTabsHeight = 220` 下限。
+      理由：一鍵取得全高網頁，直接解決回報的問題；既有拖曳行為零改變。
+- [ ] **B. 只調低 `_minTabsHeight`**（例如 220 → 80）— 改動最小，但仍有下限，
+      在 384×640 這種小螢幕上網頁可視區仍然偏小。
+- [ ] **C. A + B 併用** — 收合開關加上更低的下限。
+
+### Q7. #6 是否額外為 `InAppWebView` 加上 `GlobalKey`？ — 影響範圍：`example` 單檔 ✅ 已確認
+
+F-1 的主修法（`resizeToAvoidBottomInset: false`）已能消除鍵盤情境的分支切換，但旋轉螢幕、
+桌面視窗縮放等其他情境仍可能跨過 526 這條線並重建 WebView。
+
+- [x] **A. 加上**（建議）— 為 `_buildWebViewWithProgress()` 建立的 `InAppWebView` 掛一個
+      state 層級的 `GlobalKey`。兩個分支不會同時存在，element 會被**重新掛載而非銷毀**，
+      任何未來的分支切換都不再重載頁面。約 2 行。
+- [ ] **B. 不加** — 只做主修法，維持最小 delta；其他情境的重建行為維持現狀。
+
 ## Key Decisions
 
+- **[Q6]** #6 的底部面板採「新增收合開關」，展開狀態的 `_minTabsHeight = 220` 維持不變——
+  理由：一鍵取得全高網頁才真正解決回報的問題，只調低下限在 384×640 的裝置上仍然不夠；
+  既有拖曳行為零改變，回退面積最小。
+- **[Q7]** #6 為 `InAppWebView` 掛上 state 層級 `GlobalKey`——
+  理由：`resizeToAvoidBottomInset: false` 只擋掉鍵盤這一個觸發源，旋轉與桌面視窗縮放仍會
+  跨過 `minRequiredHeight = 526`；GlobalKey 讓 element 被重新掛載而非銷毀，從結構上消除
+  「分支切換就重載頁面」這個類別的問題，成本約 2 行。
+- **[迭代分類]** #6 併入本計畫作為 Iteration 而非另開計畫（使用者拍板）——
+  理由：它存在的唯一目的是讓 #5 的 Phase 5 實機驗證有可用載體，與本計畫同一次收斂；
+  代價是本計畫 delta 多出 `example/` 一個檔案，已於 Goals 註明該檔不屬套件程式碼，
+  #1~#4 的「零對外行為變更」驗收不受影響。
 - **[Q1]** #1 的 gating 採「creationParams + 內部 method channel 重新同步」——
   理由：`_controller` 只在 platform view 建立時抓一次 params，`keepAlive` 會讓同一個 native
   webview 被新 widget 重新掛載，純快照會過期並造成事件靜默消失。
