@@ -308,6 +308,16 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
   /// Total pan reported so far by the in-flight gesture; the end event does not carry it.
   Offset _panTotal = Offset.zero;
 
+  /// Geometry last reported from a pointer down, so an unchanged one can be skipped.
+  ///
+  /// Only that call site is deduplicated. Clicking never moves or resizes the view, yet every
+  /// press costs two method channel round trips and makes WebView2 redo put_Bounds and
+  /// SetWindowPos. The other call sites must keep repeating: a report that arrives before the
+  /// WebView2 controller exists is dropped natively, and it is a later repeat that actually
+  /// applies the bounds -- deduplicating them leaves the WebView blank.
+  Size? _pointerDownSize;
+  Offset? _pointerDownPosition;
+
   final _controller = CustomPlatformViewController();
   final _focusNode = FocusNode();
 
@@ -394,8 +404,7 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
                   _controller._setCursorPos(ev.localPosition);
                 },
                 onPointerDown: (ev) {
-                  _reportSurfaceSize();
-                  _reportWidgetPosition();
+                  _reportGeometryIfMoved();
 
                   if (!_focusNode.hasFocus) {
                     _focusNode.requestFocus();
@@ -543,6 +552,24 @@ class _CustomPlatformViewState extends State<CustomPlatformView>
             : const SizedBox(),
       ),
     );
+  }
+
+  /// Reports geometry from a pointer down, skipping the report when nothing moved.
+  /// See [_pointerDownSize] for why only this call site may be skipped.
+  void _reportGeometryIfMoved() {
+    final box = _key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) {
+      return;
+    }
+    final size = box.size;
+    final position = box.localToGlobal(Offset.zero);
+    if (size == _pointerDownSize && position == _pointerDownPosition) {
+      return;
+    }
+    _pointerDownSize = size;
+    _pointerDownPosition = position;
+    _reportSurfaceSize();
+    _reportWidgetPosition();
   }
 
   void _reportSurfaceSize() async {
