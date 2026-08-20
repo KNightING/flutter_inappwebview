@@ -4,9 +4,10 @@
 
 ## Summary
 
-Windows 的 WebView2 不是真實視窗，它的尺寸與位置由 Flutter 端主動上報，畫面則透過
-texture 交給 Flutter 合成。本頁說明這兩條路徑目前的行為：texture 只在有新影格時才複製，
-而幾何上報**刻意保留重複**——那些看似多餘的重送其實是 WebView2 尚未就緒時的重試機制。
+Windows 的 WebView2 畫面走 texture，尺寸與位置由 Flutter 端主動上報到一個不可見的宿主
+HWND。本頁說明這兩條路徑目前的行為：texture 只在有新影格時才複製，而幾何上報**刻意保留
+重複**——那些看似多餘的重送其實是 WebView2 尚未就緒時的重試機制。宿主視窗的其他職責見
+[Windows WebView 焦點模型](windows-webview-focus.md)。
 
 ## texture 只在 dirty 時複製
 
@@ -29,6 +30,18 @@ texture 交給 Flutter 合成。本頁說明這兩條路徑目前的行為：tex
 > 與 `put_Bounds`，而 `InAppWebView::setSurfaceSize` 在 `webViewController` 尚未建立時會
 > 直接 return。初期那幾次「重複」的上報，實際上是等 controller 就緒的重試。去掉它們，
 > texture 就永遠不會 Start。
+
+### 位置上報的作用對象
+
+`setPosition` 移動的是**宿主 HWND**，不是畫面——頁面內容由 texture 呈現，與這個座標無關。
+它唯一的作用是決定 WebView2 自繪彈出物（`<select>` 下拉、右鍵選單、自動填入、IME 候選字
+視窗）的落點。
+
+宿主是 FlutterView 的 `WS_CHILD` 子視窗，因此 `SetWindowPos` 收的是**相對 parent client
+area 的座標**，與 Dart 端上報的 widget 位置同一個原點，不需要轉換為螢幕座標、也沒有標題列
+或邊框要扣。
+
+## 幾何上報的去重範圍
 
 目前只有 `onPointerDown` 這一條路徑做去重（`_reportGeometryIfMoved()`）——它是純粹因應
 使用者互動而重送的，值未變時沒有任何理由再走一次 `put_Bounds` + `SetWindowSize`。

@@ -78,7 +78,7 @@ Federated plugin，一份 app-facing 套件 + 各平台實作 + 共用介面：
 
 | 項目 | 現值 |
 | :--- | :--- |
-| AGP | **9.3.0**；Gradle wrapper 9.5.0 |
+| AGP | **9.3.0**；Gradle wrapper 9.5.0（升級歷程見 `archive/2608121003-agp-9-upgrade.md`） |
 | Kotlin Gradle Plugin | **2.4.0**（Flutter 3.47 的 template 值） |
 | `compileSdk` / `targetSdk` | 取 `flutter.compileSdkVersion`（跟隨 Flutter SDK，非硬寫）=36 |
 | `minSdkVersion` | **24**（Flutter 支援下限；app 端低於 23 即建置失敗） |
@@ -92,7 +92,11 @@ Federated plugin，一份 app-facing 套件 + 各平台實作 + 共用介面：
   2026-08-15 進一步升至 12.0。
 - 兩個 iOS example 已採用 **UIScene 生命週期**（`UISceneDelegateClassName` 用 engine 內建的
   `FlutterSceneDelegate`，未新增 Swift 檔案、未改 `project.pbxproj` 結構）。
-- **已知未驗證**：實體 iOS 裝置、Linux、Windows example 實跑目視。
+- **已知未驗證**：實體 iOS 裝置、Linux。
+  （Windows example 已多次以真實操作驗證：觸控板捲動見
+  `archive/2608152118-windows-trackpad-scroll.md` 與
+  `archive/2608152335-windows-trackpad-pointer-input.md`；焦點、IME、原生彈出物落點與
+  各輸入路徑見 `archive/2608201704-windows-webview-focus.md`。）
 
 ### JS 橋接名稱
 

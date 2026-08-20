@@ -3623,7 +3623,7 @@ namespace flutter_inappwebview_plugin
 
   void InAppWebView::setPosition(size_t x, size_t y, float scale_factor)
   {
-    if (!webViewController || !plugin || !plugin->registrar) {
+    if (!webViewController) {
       return;
     }
 
@@ -3632,23 +3632,42 @@ namespace flutter_inappwebview_plugin
       auto scaled_x = static_cast<int>(x * scale_factor);
       auto scaled_y = static_cast<int>(y * scale_factor);
 
-      auto titleBarHeight = ((GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYFRAME)) * scale_factor) + GetSystemMetrics(SM_CXPADDEDBORDER);
-      auto borderWidth = (GetSystemMetrics(SM_CXBORDER) + GetSystemMetrics(SM_CXPADDEDBORDER)) * scale_factor;
-
-      RECT flutterWindowRect;
-      HWND flutterWindowHWnd = plugin->registrar->GetView()->GetNativeWindow();
-      GetWindowRect(flutterWindowHWnd, &flutterWindowRect);
-
       HWND webViewHWnd;
       if (succeededOrLog(webViewController->get_ParentWindow(&webViewHWnd))) {
+        // The host window is a WS_CHILD of the Flutter view, so SetWindowPos takes coordinates
+        // relative to that parent's client area -- the same origin the widget position reported
+        // from Dart is measured from. Hence no screen-space conversion and no title bar or
+        // border to subtract. This position only places the native popups WebView2 draws itself
+        // (<select> dropdowns, context menus, autofill, the IME candidate window); the page
+        // content reaches Flutter as a texture.
         ::SetWindowPos(webViewHWnd,
           nullptr,
-          static_cast<int>(flutterWindowRect.left + scaled_x - borderWidth),
-          static_cast<int>(flutterWindowRect.top + scaled_y - titleBarHeight),
+          scaled_x,
+          scaled_y,
           0, 0,
           SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
       }
     }
+  }
+
+  // WebView2 never takes Win32 focus on its own in composition (windowless) mode: SendMouseInput
+  // and SendPointerInput carry input, not focus semantics. The host has to hand focus over, and the
+  // host window must itself hold Win32 focus for MoveFocus to stick -- the Flutter embedder sets
+  // focus back to the FlutterView on every mouse down, so without this the WebView holds focus only
+  // until the next click. Both calls are idempotent, which is why every pointer down runs them
+  // unconditionally; tracking focus state here instead would drift from what Win32 actually holds.
+  void InAppWebView::moveFocusToWebView()
+  {
+    if (!webViewController) {
+      return;
+    }
+
+    HWND webViewHWnd;
+    if (succeededOrLog(webViewController->get_ParentWindow(&webViewHWnd))) {
+      ::SetFocus(webViewHWnd);
+    }
+
+    failedLog(webViewController->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC));
   }
 
   void InAppWebView::setCursorPos(double x, double y)
@@ -3687,6 +3706,8 @@ namespace flutter_inappwebview_plugin
       event = COREWEBVIEW2_POINTER_EVENT_KIND_DOWN;
       pointerFlags =
         POINTER_FLAG_DOWN | POINTER_FLAG_INRANGE | POINTER_FLAG_INCONTACT;
+      // Before the event, so the page's own focus handling still decides which element takes it.
+      moveFocusToWebView();
       break;
     case InAppWebViewPointerEventKind::Enter:
       event = COREWEBVIEW2_POINTER_EVENT_KIND_ENTER;
@@ -3749,6 +3770,8 @@ namespace flutter_inappwebview_plugin
 
     switch (kind) {
     case InAppWebViewPointerEventKind::Down:
+      // Before the event, so the page's own focus handling still decides which element takes it.
+      moveFocusToWebView();
       switch (button) {
       case InAppWebViewPointerButton::Primary:
         virtualKeys_.setIsLeftButtonDown(true);
