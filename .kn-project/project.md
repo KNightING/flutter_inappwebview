@@ -93,8 +93,10 @@ Federated plugin，一份 app-facing 套件 + 各平台實作 + 共用介面：
 - 兩個 iOS example 已採用 **UIScene 生命週期**（`UISceneDelegateClassName` 用 engine 內建的
   `FlutterSceneDelegate`，未新增 Swift 檔案、未改 `project.pbxproj` 結構）。
 - **已知未驗證**：實體 iOS 裝置、Linux。
-  （Windows example 已於觸控板捲動的兩份計畫中以真實操作驗證，見
-  `archive/2608152118-windows-trackpad-scroll.md` 與 `archive/2608152335-windows-trackpad-pointer-input.md`。）
+  （Windows example 已多次以真實操作驗證：觸控板捲動見
+  `archive/2608152118-windows-trackpad-scroll.md` 與
+  `archive/2608152335-windows-trackpad-pointer-input.md`；焦點、IME、原生彈出物落點與
+  各輸入路徑見 `archive/2608201704-windows-webview-focus.md`。）
 
 ### JS 橋接名稱
 

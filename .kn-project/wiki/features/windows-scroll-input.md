@@ -8,6 +8,7 @@ Windows 的 WebView2 以 composition 模式繪製到 texture，不在 hit-test �
 Flutter 端合成後送進去**。捲動有兩條路徑：滑鼠滾輪合成為 wheel 事件，**觸控板手勢則合成為
 觸控接觸點**，讓瀏覽器自己驅動捲動——慣性與斜滑同時捲兩軸因此都成立。
 其他平台不需要這一套（macOS 的 `AppKitView` 由 AppKit 直接派送事件）。
+pointer down 另外負責把焦點交給 WebView2，見 [Windows WebView 焦點模型](windows-webview-focus.md)。
 
 ## 為什麼只有 Windows 需要
 
@@ -78,6 +79,7 @@ flowchart TD
   [2608152335-windows-trackpad-pointer-input](../../archive/2608152335-windows-trackpad-pointer-input.md)
   （觸控板改走合成觸控）
 - 同檔案的另一條路徑（幾何上報與 texture 更新）：[Windows 視圖幾何與 texture 更新](windows-view-geometry.md)
+- 同一條輸入路徑的焦點職責：[Windows WebView 焦點模型](windows-webview-focus.md)
 - 上游未修的相關 issue：`https://github.com/pichillilorenzo/flutter_inappwebview/issues/2511`、
   `https://github.com/pichillilorenzo/flutter_inappwebview/issues/2503`
 - Flutter 觸控板手勢語意：`https://docs.flutter.dev/release/breaking-changes/trackpad-gestures`
