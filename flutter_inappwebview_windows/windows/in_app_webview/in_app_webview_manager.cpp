@@ -123,7 +123,14 @@ namespace flutter_inappwebview_plugin
     RECT bounds;
     GetClientRect(plugin->registrar->GetView()->GetNativeWindow(), &bounds);
 
-    auto hwnd = CreateWindowEx(0, windowClass_.lpszClassName, L"", 0, 0,
+    // WS_CHILD is required. With a parent HWND but no WS_CHILD, Win32 treats that HWND as a
+    // mere owner and this window stays top-level; WebView2 focuses it when the page focuses an
+    // input, which deactivates the Flutter window, and the next click reactivates the Flutter
+    // window and lets the runner's WM_ACTIVATE handler pull focus straight back off the WebView.
+    // Deliberately not WS_VISIBLE: a visible child would sit above the FlutterView and swallow
+    // the mouse messages the plugin synthesises its input from. Nothing is ever painted here --
+    // the page reaches Flutter as a texture.
+    auto hwnd = CreateWindowEx(0, windowClass_.lpszClassName, L"", WS_CHILD, 0,
       0, bounds.right - bounds.left, bounds.bottom - bounds.top,
       plugin->registrar->GetView()->GetNativeWindow(),
       nullptr,
