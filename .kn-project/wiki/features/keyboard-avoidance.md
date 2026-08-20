@@ -168,6 +168,8 @@ flowchart TD
 
 - 相關節點：[Android 平台視圖合成模式](android-platform-view-composition.md)
   （預設的 TLHC 會啟用本功能所依賴的 IME 代理路徑）
+- 相關節點：[Android 邊緣返回手勢的合成事件處理](android-back-gesture.md)
+  （兩者共用 `InAppWebView` 的觸控路徑；**鍵盤開著時做邊緣返回手勢**是唯一的交會點，尚未驗證）
 - 歸檔計畫：[2608111609-webview-keyboard-avoidance](../../archive/2608111609-webview-keyboard-avoidance.md)、
   [2608140927-keyboard-avoidance-pre-r](../../archive/2608140927-keyboard-avoidance-pre-r.md)
   （解除 Android 的 API 30 下限）
