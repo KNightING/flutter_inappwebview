@@ -87,11 +87,11 @@ flowchart TD
 ## Android 實作
 
 > [!IMPORTANT]
-> **本機制在 TLHC 與 HC 兩種合成模式下皆須成立。** 本 fork 的
-> [平台視圖合成模式](android-platform-view-composition.md) 預設為 TLHC
-> (`useHybridComposition: false`)，該模式會啟用 `InputAwareWebView` 的 IME 代理路徑
-> （HC 下那兩處守衛直接返回）。避讓本身的插邊攔截與 `setTranslationY` 位移不依賴合成模式，
-> 但輸入法連線走哪條路徑會因此不同——改動任一邊時兩種模式都要驗。
+> **本機制在 TLHC / HC / HCPP 三種合成模式下皆須成立。** 本 fork 的
+> [平台視圖合成模式](android-platform-view-composition.md) 預設為 TLHC，該模式會啟用
+> `InputAwareWebView` 的 IME 代理路徑；HC 與 HCPP 下那**四處**守衛直接交給 `super`。
+> 避讓本身的插邊攔截與 `setTranslationY` 位移不依賴合成模式，
+> 但輸入法連線走哪條路徑會因此不同——改動任一邊時三種模式都要驗。
 
 不分版本共用的部分：
 
@@ -161,13 +161,14 @@ flowchart TD
 - **autofill 建議下拉未驗證**——測試裝置無 autofill 資料，無候選即無下拉。
 - **API 30 以下的迴歸驗證以模擬器為主**：pre-R 路徑於 Urovo U2（API 29）實機驗證；
   API 30+ 的迴歸則於 API 36 模擬器完成，未於 R+ 實體裝置複驗。
-- **TLHC 預設下的複驗僅涵蓋 pre-R**：合成模式改為 TLHC 後，避讓行為於 U2（API 29）以
-  真輸入法實機確認；**API 30+ 搭配 TLHC 尚未於實體裝置複驗**。
+- **各合成模式的實機複驗涵蓋範圍不同**：TLHC 於 U2（API 29）以真輸入法實機確認；
+  HCPP 於 Android 16 平板以注音輸入法實機確認（composing、候選字列、焦點框保持可見）。
+  **API 30+ 搭配 TLHC、以及 HC 模式，皆尚未於實體裝置複驗**。
 
 ## References
 
 - 相關節點：[Android 平台視圖合成模式](android-platform-view-composition.md)
-  （預設的 TLHC 會啟用本功能所依賴的 IME 代理路徑）
+  （預設的 TLHC 會啟用本功能所依賴的 IME 代理路徑；HC 與 HCPP 則不走該路徑）
 - 相關節點：[Android 邊緣返回手勢的合成事件處理](android-back-gesture.md)
   （兩者共用 `InAppWebView` 的觸控路徑；**鍵盤開著時做邊緣返回手勢**是唯一的交會點，尚未驗證）
 - 歸檔計畫：[2608111609-webview-keyboard-avoidance](../../archive/2608111609-webview-keyboard-avoidance.md)、

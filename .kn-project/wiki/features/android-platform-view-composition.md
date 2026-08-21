@@ -4,53 +4,120 @@
 
 ## Summary
 
-Android 的 WebView 以何種方式與 Flutter 畫面合成，由 `InAppWebViewSettings.useHybridComposition`
-決定。**本 fork 的預設值為 `false`（TLHC），與上游的 `true`（Hybrid Composition）不同**。
-此值只能於 `initialSettings` 指定，且會決定 `InputAwareWebView` 的 IME 代理路徑是否啟用。
+Android 的 WebView 以何種方式與 Flutter 畫面合成，由 `InAppWebViewSettings.androidCompositionMode`
+決定，三種模式為 TLHC（**本 fork 預設**）、HC、HCPP。舊的布林 `useHybridComposition` 仍可用但已
+deprecated。此設定只能於 `initialSettings` 指定，且會決定 `InputAwareWebView` 的 IME 代理路徑
+是否啟用。
 
-## 兩種模式
+## 三種模式
 
-| | `useHybridComposition: false`（本 fork 預設） | `useHybridComposition: true`（上游預設） |
+| | `TEXTURE_LAYER_HYBRID_COMPOSITION`（預設） | `HYBRID_COMPOSITION` | `HYBRID_COMPOSITION_PLUS_PLUS` |
+| :--- | :--- | :--- | :--- |
+| 慣稱 | TLHC | HC | HCPP |
+| Flutter API | `initSurfaceAndroidView` | `initExpensiveAndroidView` | `initHybridAndroidView` |
+| 合成方式 | WebView 繪到 texture，由 Flutter 合成 | WebView 進入真實 view 階層，Flutter 內容改繪到 `FlutterImageView` | 兩者各自繪到原生 Surface，由 SurfaceFlinger 合成 |
+| 成本 | Flutter 只付自己的合成 | **Flutter 需為畫在 WebView 之上的所有內容付出合成代價**，且 raster 與 platform 執行緒合併 | 無上述兩項成本 |
+| 額外需求 | 無 | 無 | **API 34+、Impeller on Vulkan、app 端 opt-in** |
+| `InputAwareWebView` IME 代理 | **啟用** | 停用 | 停用（與 HC 同側） |
+
+TLHC 在不支援的裝置上由 Flutter 引擎自動退回 HC。HCPP 在條件不滿足時由本套件退回 TLHC
+（見下方「HCPP 的啟用與退回」），兩者都不會讓畫面消失。
+
+> [!NOTE]
+> Flutter 官方的 platform views 文件把 HC 與 TLHC 的 API 對應寫混了（宣稱 HC 用
+> `initSurfaceAndroidView`）。上表以 Flutter 3.47 的
+> `packages/flutter/lib/src/services/platform_views.dart` 為準。
+
+## 設定方式
+
+```dart
+InAppWebView(
+  initialSettings: InAppWebViewSettings(
+    androidCompositionMode: AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS,
+  ),
+)
+```
+
+`androidCompositionMode` 非 null 時勝出；為 null 時才沿用 deprecated 的 `useHybridComposition`
+（`true` 對應 `HYBRID_COMPOSITION`）。兩者都未設就是 TLHC。
+
+合成模式對 `InAppBrowser` 與 `HeadlessInAppWebView` **不適用**——它們不經過 platform view。
+
+## HCPP 的啟用與退回
+
+HCPP 需要三個條件同時成立，缺一即退回 TLHC：
+
+1. **Android API 34+**
+2. **Impeller 跑在 Vulkan 後端**（現代裝置上引擎會自行選用）
+3. **App 端 opt-in**——套件無法代為開啟
+
+opt-in 有兩條路徑，最終都落到引擎層的 `enable-hcpp-and-surface-control` switch：
+
+| 情境 | 做法 |
+| :--- | :--- |
+| Release build | `AndroidManifest.xml` 加入 `io.flutter.embedding.android.EnableHcpp` = `true` |
+| 開發期 | `flutter run --enable-hcpp`（隱藏旗標，`--help` 不會列出） |
+
+> [!CAUTION]
+> **不要為了 HCPP 而在 manifest 強制 `io.flutter.embedding.android.ImpellerBackend` = `vulkan`。**
+> 舊裝置給不出有效的 Vulkan context，會造成**啟動即崩潰**
+> （`Check failed: android_context_->IsValid()`，實測 Android 10 裝置）。
+> Vulkan 後端的選擇交給引擎判斷即可。
+
+支援度由引擎回答，而**問得太早會得到 `false`**：套件在 plugin 註冊時就先問一次，但那早於引擎
+附著。因此只有正面結果會被快取，負面結果允許之後重問，並在每次建立 WebView 時順手重探。
+
+要保證**第一個**建立的 WebView 就拿到 HCPP，可先 await：
+
+```dart
+await precacheHybridCompositionPlusPlusSupport();
+```
+
+## native 端只看「是否在真實 view 階層」
+
+Java 端沒有三種模式的概念，只有一個布林 `useHybridComposition`，它在 native 被分支判斷
+**21 處**。這些分支問的其實是同一件事：**WebView 是否位於真實 view 階層中、是否有 `containerView`**。
+
+HCPP 在真實階層，與 HC 同側，因此 Dart 在 HCPP 模式下對 native 送 `useHybridComposition: true`。
+分支可歸為四類：
+
+| 類別 | 位置 | 非 hybrid（TLHC）時 |
 | :--- | :--- | :--- |
-| 名稱 | Texture Layer Hybrid Composition (TLHC) | Hybrid Composition (HC) |
-| Flutter API | `PlatformViewsService.initSurfaceAndroidView` | `PlatformViewsService.initExpensiveAndroidView` |
-| 合成方式 | WebView 繪製到 texture，由 Flutter 合成 | WebView 進入真實 view 階層，Flutter 內容改繪到 `FlutterImageView` |
-| 成本 | Flutter 只付自己的合成 | **Flutter 需為畫在 WebView 之上的所有內容付出合成代價**，且 raster 與 platform 執行緒合併 |
-| `InputAwareWebView` IME 代理 | **啟用** | 停用（兩處 `if (useHybridComposition) return;` 直接返回） |
+| containerView 代理 | `FlutterWebView.java:67` / `:173` / `:179` / `:185` / `:192`、`InAppWebView.java:1712` / `:1766` / `:2236` | 以 FlutterView 作為 containerView 並代理 |
+| IME 代理 workaround | `InputAwareWebView.java:209` / `:230` / `:271` / `:349`（**四處**） | 執行 workaround |
+| 自訂浮動選單 | `InAppWebView.java:539` / `:651` / `:1746` / `:1755` | 用套件自建的浮動選單 |
+| layer type | `InAppWebView.java:445` / `:1124` | 不設 `setLayerType` |
 
-TLHC 在不支援的裝置上會由 Flutter 引擎自動退回 HC，故翻預設不會讓任何裝置失去畫面。
+結構性佐證：多數 `!useHybridComposition` 分支另有 `containerView != null` 守衛，而 containerView
+只在非 hybrid 時才非 null（`FlutterWebView.java:67`），兩道守衛由建構方式保證一致。
 
-## 為什麼本 fork 改了預設
+## 預設值必須三處一致
 
-HC 讓 Flutter 為 WebView 上方的每一層內容付出合成成本，那是每幀都在付、而多數使用情境並不需要的代價。
-TLHC 沒有這條成本，也不需要合併 raster 與 platform 執行緒。
-
-代價是啟用了一條在 HC 下休眠的路徑：`InputAwareWebView` 的 IME 代理。該路徑負責在 platform view
-情境下把輸入法連線接回正確的 view，直接關係到 [軟鍵盤避讓](keyboard-avoidance.md) 能否運作。
-
-## 三處預設值必須一致
-
-翻動預設時三個字面值必須同步，只翻其中一處會讓「不傳設定」與「傳了部分設定」走到不同分支：
+deprecated 的 `useHybridComposition` 有三個字面預設值，改動時必須同步，否則「不傳設定」與
+「傳了部分設定」會走到不同分支：
 
 - `flutter_inappwebview_platform_interface/lib/src/in_app_webview/in_app_webview_settings.dart`
   ——建構子預設值（另有同步的 `.g.dart`）
-- `flutter_inappwebview_android/lib/src/in_app_webview/in_app_webview.dart`
-  ——widget 端解析 `initialSettings` 時的 `?? false`
+- `flutter_inappwebview_android/lib/src/in_app_webview/in_app_webview.dart` ——widget 端的 `?? false`
 - `.../webview/in_app_webview/InAppWebViewSettings.java` ——native 欄位預設
 
 ## 已知限制
 
 - **僅能於 `initialSettings` 指定**。合成模式在 platform view 建立當下就決定，之後
   `setSettings` 改不動。
-- **與上游行為分歧**。從上游遷移過來、且依賴 HC 行為的使用端，需自行傳
-  `useHybridComposition: true` 還原。
-- **HCPP 尚未支援**。Flutter 另有 Hybrid Composition++（`initHybridAndroidView`，需 API 34+
-  與 Vulkan），本套件目前未提供該選項。
+- **與上游行為分歧**。上游預設 HC；從上游遷移且依賴 HC 行為的使用端，需自行指定
+  `AndroidCompositionMode.HYBRID_COMPOSITION` 還原。
+- **HCPP 的驗證涵蓋兩台裝置**（一台 Android 16 實機、一台 API 36 模擬器），非裝置矩陣。
+  模擬器需強制 Vulkan 後端才走得到 HCPP，實機不需要。
 
 ## References
 
 - 歸檔計畫：[2608191735-webview-render-perf](../../archive/2608191735-webview-render-perf.md)
+  （預設改為 TLHC）、[2608200109-android-hcpp-mode](../../archive/2608200109-android-hcpp-mode.md)
+  （新增 HCPP）
+- 相關節點：[軟鍵盤避讓](keyboard-avoidance.md)——本頁的 IME 代理路徑直接關係到該功能
 - Flutter 官方說明：`https://docs.flutter.dev/platform-integration/android/platform-views`
+  （API 對應有誤，見上方註記）
 
 ---
 
