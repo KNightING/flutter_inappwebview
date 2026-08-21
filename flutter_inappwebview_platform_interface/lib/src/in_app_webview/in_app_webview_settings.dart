@@ -1183,11 +1183,21 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
   bool? useHybridComposition;
 
   ///How the WebView is composited with the Flutter UI.
-  ///The default value is [AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION].
+  ///
+  ///**Leaving this unset picks the mode automatically**: Hybrid Composition++ wherever it is
+  ///actually available, Texture Layer Hybrid Composition everywhere else. Set it explicitly to
+  ///pin one mode -- [AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION] is the way to opt
+  ///out of HCPP.
   ///
   ///This supersedes the deprecated [useHybridComposition]. When this is non-null it wins;
-  ///when it is null the value of [useHybridComposition] is used instead
-  ///(`true` maps to [AndroidCompositionMode.HYBRID_COMPOSITION]).
+  ///when it is null and [useHybridComposition] is `true` the WebView still gets
+  ///[AndroidCompositionMode.HYBRID_COMPOSITION], so existing code keeps its behaviour.
+  ///
+  ///Because the composition mode is fixed when the platform view is created, the automatic
+  ///choice waits for the one-off support check to answer before creating the WebView. That
+  ///delays the very first WebView of a session by a single platform channel round trip;
+  ///subsequent ones use the cached answer and are not delayed. Pinning a mode explicitly skips
+  ///the wait entirely.
   ///
   ///Only applies to the [PlatformInAppWebViewWidget] — [PlatformInAppBrowser] and
   ///[PlatformHeadlessInAppWebView] do not go through a platform view, so composition mode

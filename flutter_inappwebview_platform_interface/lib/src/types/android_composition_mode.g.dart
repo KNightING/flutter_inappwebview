@@ -8,6 +8,10 @@ part of 'android_composition_mode.dart';
 
 ///Class that represents how the Android WebView is composited with the Flutter UI,
 ///used by `InAppWebViewSettings.androidCompositionMode`.
+///
+///Leaving that setting unset picks a mode automatically: [HYBRID_COMPOSITION_PLUS_PLUS] where
+///it is available, [TEXTURE_LAYER_HYBRID_COMPOSITION] everywhere else. These members exist to
+///pin one mode explicitly.
 class AndroidCompositionMode {
   final int _value;
   final int? _nativeValue;
