@@ -41,13 +41,24 @@
 
 > HCPP 需 API 34+ 且 Vulkan。現有裝置（U2 / API 29、模擬器 / API 32）皆不符合。
 
-- [ ] 建立 API 34+ 模擬器並確認 Vulkan 與 SurfaceControl 實際可用（`isSurfaceControlEnabled`）
-- [ ] example app 加上 manifest 的 `io.flutter.embedding.android.EnableHcpp`
-- [ ] HCPP 模式：頁面正常渲染、捲動、導覽
-- [ ] HCPP 模式：**`keyboardAvoidance` 正常**（最高風險項，`InputAwareWebView` 四處守衛的走向）
-- [ ] HCPP 模式：長按選單、文字選取、影片播放
-- [ ] **回歸**：TLHC（預設）與 HC 兩種模式行為不變
-- [ ] 在不支援的裝置（U2 / API 29）上設定 HCPP，確認退回行為符合 Q2 決議、不出現白畫面
+- [x] 建立 API 36 模擬器並確認 Vulkan 與 SurfaceControl 可用
+      （`isSurfaceControlEnabled=true`，需 `ImpellerBackend=vulkan` 才會選 Vulkan 後端）
+- [x] ~~example manifest 加 `EnableHcpp`~~ —— **該鍵無效**，真正開關是引擎 switch
+      `enable-hcpp-and-surface-control`（見 Key Decisions）
+- [x] 修正欄位文件註解中錯誤的 opt-in 說明（`EnableHcpp` 已自三個檔案移除）
+- [ ] 決定 example 要用什麼方式長期啟用 HCPP（Intent extra 即將被上游移除）
+      —— 目前以 `adb am start --ez enable-hcpp-and-surface-control true` 手動啟用
+- [x] HCPP 模式：頁面正常渲染（模擬器截圖確認）
+- [x] HCPP 模式：捲動正常（實體 Android 16 平板）
+- [x] HCPP 模式：**`keyboardAvoidance` 正常**——實體平板上注音輸入法 composing、候選字列、
+      頁面上移讓焦點框保持可見皆正常，Phase 1 對四處守衛的判定得到實機佐證
+- [x] HCPP 模式：長按選單與文字選取正常（原生 action mode，即 HC 支）
+- [x] HCPP 模式：影片播放正常——內嵌 `<video>`（`test_assets/sample_video.mp4` base64），
+      以 `currentTime` 前進為判準（2.72→3.77／秒，`paused=false`），畫面亦正常顯示
+- [x] **回歸**：TLHC 與 HC 於實體平板上切換後渲染正常；三種模式影片皆播放
+      （HC 5.74→6.78、TLHC 5.85→6.88，皆 `advanced=true`）
+- [x] U2（API 29）：`checkIfSupported` 穩定為 `false`，模式降級為 TLHC，無 FATAL、行程存活
+- [ ] U2 的**視覺**確認（測試當下裝置停在鎖定畫面，未取得畫面佐證）
 
 ## Phase 5 — 收尾
 

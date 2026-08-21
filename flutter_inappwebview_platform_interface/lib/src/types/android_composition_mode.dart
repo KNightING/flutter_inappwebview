@@ -28,10 +28,14 @@ class AndroidCompositionMode_ {
   ///Hybrid Composition++: the WebView and Flutter each draw into their own native Surface and
   ///SurfaceFlinger composites them. Full native fidelity without the thread merge.
   ///
-  ///**Requires Android API 34+, a Vulkan-capable device, and the embedding application to opt in**
-  ///by declaring `io.flutter.embedding.android.EnableHcpp` in its `AndroidManifest.xml`.
-  ///A plugin cannot enable it on the application's behalf. When any of those is missing, the
-  ///WebView falls back to [TEXTURE_LAYER_HYBRID_COMPOSITION].
+  ///**Requires Android API 34+, Impeller running on Vulkan, and the embedding application to
+  ///have enabled the engine's `enable-hcpp-and-surface-control` flag.** A plugin cannot turn
+  ///HCPP on for the application; how that flag is supplied is decided by the app and by the
+  ///Flutter version in use, and the mechanism is still changing upstream -- consult the Flutter
+  ///documentation for the version you target rather than hard-coding a manifest key.
+  ///
+  ///When any requirement is missing the WebView falls back to
+  ///[TEXTURE_LAYER_HYBRID_COMPOSITION]; nothing throws and nothing goes blank.
   @EnumSupportedPlatforms(platforms: [EnumAndroidPlatform(available: '34')])
   static const HYBRID_COMPOSITION_PLUS_PLUS =
       const AndroidCompositionMode_._internal(2);

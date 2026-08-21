@@ -1200,9 +1200,10 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
       AndroidPlatform(
         note:
             """[AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS] additionally requires API 34+,
-a Vulkan-capable device, and the embedding application to declare
-`io.flutter.embedding.android.EnableHcpp` in its `AndroidManifest.xml`. When any of those is
-missing it falls back to [AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION].""",
+Impeller running on Vulkan, and the embedding application to have enabled the engine's
+`enable-hcpp-and-surface-control` flag -- a plugin cannot turn it on for the application, and
+how that flag is supplied is still changing upstream. When any requirement is missing it falls
+back to [AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION].""",
       ),
     ],
   )

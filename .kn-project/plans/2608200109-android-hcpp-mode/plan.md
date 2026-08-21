@@ -189,6 +189,39 @@ iPad（無關）。**兩者皆不符合，現階段無法驗證任何 HCPP 實�
 
 ## Key Decisions
 
+- **[Phase 4 實測]** 影片播放於 HCPP / HC / TLHC 三種模式**皆正常**——判準取
+  `video.currentTime` 是否前進，而非目視單一幀（靜止幀與黑框都可能誤判為正常）。
+  三種模式的 `currentTime` 皆在一秒內前進約 1.03 秒且 `paused=false`。
+  探針影片沿用 repo 既有的 `test_assets/sample_video.mp4` 以 base64 內嵌，不依賴網路。
+
+- **[Phase 4 實測，重要限制]** **不可為了 HCPP 而在 app 層強制 `ImpellerBackend=vulkan`。**
+  該設定讓 API 36 模擬器得以走 Vulkan，但在 Urovo U2（Android 10）上造成啟動即崩潰：
+  `FATAL: Check failed: android_context_->IsValid(). Could not create surface from invalid
+  Android context.` 舊 GPU 給不出有效的 Vulkan context。已從 example manifest 移除。
+  文件不得建議使用端這樣做——Vulkan 後端的選擇應交給引擎自行判斷。
+- **[Phase 4 實測]** HCPP 於**實體 Android 16 平板**（model 25097RP43G）驗證通過：
+  渲染、`keyboardAvoidance` + 注音輸入法 composing、長按選單與文字選取（原生 action mode）、
+  以及 HC / TLHC 兩種既有模式的回歸皆正常。該裝置**不需要**強制 Vulkan，引擎自行選用。
+  這比模擬器更有說服力，Q4 的模擬器限制因此不再是主要驗證依據。
+- **[Phase 4 修正判讀]** 曾一度觀察到「HCPP 下畫面空白」，實為**捲動捲過頁面內容**
+  （探針頁面底部有 120vh 空白）所致。乾淨啟動下 HCPP 渲染正常，該判讀已推翻。
+
+- **[Phase 4 實測，推翻文件]** HCPP 的 opt-in **不是** `io.flutter.embedding.android.EnableHcpp`
+  manifest meta-data——Flutter 3.47 的 embedding jar 完全沒有該字串，`flutter run` 也沒有
+  `--enable-hcpp` 旗標。真正的開關是引擎 switch **`enable-hcpp-and-surface-control`**
+  （字串出現在 `libflutter.so`，且由 `FlutterShellArgs.fromIntent()` 讀取）。
+  官方文件那頁在此版本已過時。**已提交的欄位文件註解據此描述，必須修正。**
+  另註：Flutter 已警告「經由 Intent extra 設定引擎旗標」即將移除
+  （flutter/flutter#180686），長期的正確設法待查。
+- **[Phase 4 實測，發現並修正實作 bug]** 在 `registerWith()` 呼叫 `checkIfSupported()`
+  會得到 `false`，即使裝置完全支援——實測 API 36 模擬器：`registerWith` 時為 `false`，
+  同一支 app 在 `initState` 問則為 `true`。原實作把該 `false` 永久快取，等於讓 HCPP
+  整個 session 失效。**修法：只快取正面結果**，負面結果允許之後重問，並在 widget `build()`
+  順手重探一次讓後續 WebView 自癒。此為 Q2A「查一次並快取」的必要修正。
+- **[Phase 4 實測]** API 36 模擬器（Apple Silicon）**可以跑 HCPP**，但需要
+  `ImpellerBackend=vulkan`——預設會選 OpenGLES 後端，而 HCPP 要求 Vulkan。
+  Q4A 的假設成立，但成立條件比預期嚴格。
+
 - **[執行中]** 新設定欄位必須**同時**加到來源建構子的參數列——
   理由：產生器由來源建構子推導具名參數。只宣告欄位不加參數，`InAppWebViewSettings(...)`
   就用不到它（實測 `undefined_named_parameter`），且同樣不會在產生時報錯。

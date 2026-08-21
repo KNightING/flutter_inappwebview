@@ -15,25 +15,30 @@ import 'in_app_webview_controller.dart';
 ///
 /// Platform specific implementations can add additional fields by extending
 /// this class.
-/// Whether Hybrid Composition++ can actually be used on this device and application.
+/// Whether Hybrid Composition++ is known to be usable on this device and application.
 ///
-/// `null` while the check has not resolved yet. The platform view factory below runs
-/// synchronously inside `onCreatePlatformView`, so the answer has to be known before then --
-/// [precacheHybridCompositionPlusPlusSupport] resolves it once at plugin registration.
-bool? _hcppSupported;
+/// Only a positive answer is cached. The check is answered by the engine, and asking before the
+/// engine has attached reports `false` even where HCPP is fully available -- observed on an
+/// API 36 emulator, where the call made from [AndroidInAppWebViewPlatform.registerWith] returned
+/// `false` while the same call a few hundred milliseconds later returned `true`. Caching that
+/// first answer would disable HCPP for the whole session.
+bool _hcppSupported = false;
 Future<bool>? _hcppProbe;
 
-/// Resolves once whether Hybrid Composition++ is available, and caches the answer.
+/// Resolves whether Hybrid Composition++ is available, caching only a positive result.
 ///
 /// HCPP needs Android API 34+, a Vulkan-capable device, AND the embedding application to have
-/// declared `io.flutter.embedding.android.EnableHcpp` in its manifest -- a plugin cannot turn it
-/// on by itself. The engine answers all three at once through `isSurfaceControlEnabled`.
+/// opted in -- a plugin cannot turn it on by itself. The engine answers all of that at once.
 ///
-/// Safe to call more than once; the check runs only on the first call.
+/// Safe to call repeatedly: concurrent calls share one in-flight check, and once the answer is
+/// `true` it is returned without asking again.
+///
+/// Await this before building the first [InAppWebView] if that WebView must get HCPP: the
+/// platform view factory has to choose a mode synchronously, so a WebView built before any check
+/// has succeeded falls back to Texture Layer Hybrid Composition.
 Future<bool> precacheHybridCompositionPlusPlusSupport() {
-  final cached = _hcppSupported;
-  if (cached != null) {
-    return Future<bool>.value(cached);
+  if (_hcppSupported) {
+    return Future<bool>.value(true);
   }
   return _hcppProbe ??= HybridAndroidViewController.checkIfSupported()
       .then((supported) {
@@ -41,19 +46,20 @@ Future<bool> precacheHybridCompositionPlusPlusSupport() {
         return supported;
       })
       .catchError((Object _) {
-        // Engines without the HCPP channel answer with a MissingPluginException. Anything we
-        // cannot confirm counts as unsupported -- falling back costs performance, guessing wrong
-        // in the other direction costs a blank WebView.
-        _hcppSupported = false;
+        // Engines without the HCPP channel answer with a MissingPluginException.
         return false;
+      })
+      .whenComplete(() {
+        // Let a later call ask again: a negative answer may only mean "asked too early".
+        _hcppProbe = null;
       });
 }
 
 /// Whether Hybrid Composition++ is known to be usable right now.
 ///
-/// Reports `false` while [precacheHybridCompositionPlusPlusSupport] is still in flight: the mode
-/// has to be decided synchronously, and an unresolved check is not a confirmation.
-bool get isHybridCompositionPlusPlusSupported => _hcppSupported ?? false;
+/// Reports `false` until a check has succeeded -- the mode must be decided synchronously, and an
+/// unresolved check is not a confirmation.
+bool get isHybridCompositionPlusPlusSupported => _hcppSupported;
 
 class AndroidInAppWebViewWidgetCreationParams
     extends PlatformInAppWebViewWidgetCreationParams {
@@ -358,6 +364,12 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
         // force keep alive id to match headless webview id
         params.keepAlive?.id = headlessId;
       }
+    }
+
+    // Keeps the answer fresh without blocking: if the first check ran before the engine was
+    // ready, this is what lets later WebViews still get HCPP.
+    if (!isHybridCompositionPlusPlusSupported) {
+      precacheHybridCompositionPlusPlusSupport();
     }
 
     final compositionMode = _resolveCompositionMode(initialSettings);
