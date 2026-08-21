@@ -15,6 +15,46 @@ import 'in_app_webview_controller.dart';
 ///
 /// Platform specific implementations can add additional fields by extending
 /// this class.
+/// Whether Hybrid Composition++ can actually be used on this device and application.
+///
+/// `null` while the check has not resolved yet. The platform view factory below runs
+/// synchronously inside `onCreatePlatformView`, so the answer has to be known before then --
+/// [precacheHybridCompositionPlusPlusSupport] resolves it once at plugin registration.
+bool? _hcppSupported;
+Future<bool>? _hcppProbe;
+
+/// Resolves once whether Hybrid Composition++ is available, and caches the answer.
+///
+/// HCPP needs Android API 34+, a Vulkan-capable device, AND the embedding application to have
+/// declared `io.flutter.embedding.android.EnableHcpp` in its manifest -- a plugin cannot turn it
+/// on by itself. The engine answers all three at once through `isSurfaceControlEnabled`.
+///
+/// Safe to call more than once; the check runs only on the first call.
+Future<bool> precacheHybridCompositionPlusPlusSupport() {
+  final cached = _hcppSupported;
+  if (cached != null) {
+    return Future<bool>.value(cached);
+  }
+  return _hcppProbe ??= HybridAndroidViewController.checkIfSupported()
+      .then((supported) {
+        _hcppSupported = supported;
+        return supported;
+      })
+      .catchError((Object _) {
+        // Engines without the HCPP channel answer with a MissingPluginException. Anything we
+        // cannot confirm counts as unsupported -- falling back costs performance, guessing wrong
+        // in the other direction costs a blank WebView.
+        _hcppSupported = false;
+        return false;
+      });
+}
+
+/// Whether Hybrid Composition++ is known to be usable right now.
+///
+/// Reports `false` while [precacheHybridCompositionPlusPlusSupport] is still in flight: the mode
+/// has to be decided synchronously, and an unresolved check is not a confirmation.
+bool get isHybridCompositionPlusPlusSupported => _hcppSupported ?? false;
+
 class AndroidInAppWebViewWidgetCreationParams
     extends PlatformInAppWebViewWidgetCreationParams {
   AndroidInAppWebViewWidgetCreationParams({
@@ -320,13 +360,13 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
       }
     }
 
-    // Defaults to Texture Layer Hybrid Composition: Hybrid Composition puts the WebView in the
-    // real view hierarchy and makes Flutter pay for the composition of everything drawn over it.
-    var useHybridComposition =
-        (params.initialSettings != null
-            ? initialSettings.useHybridComposition
-            : params.initialOptions?.android.useHybridComposition) ??
-        false;
+    final compositionMode = _resolveCompositionMode(initialSettings);
+
+    // The native side branches on a single boolean that really asks "is the WebView in the real
+    // view hierarchy?". HCPP is, exactly like Hybrid Composition, so both report true.
+    settingsMap['useHybridComposition'] =
+        compositionMode !=
+        AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION;
 
     return PlatformViewLink(
       key: params.key,
@@ -343,7 +383,7 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
           },
       onCreatePlatformView: (PlatformViewCreationParams params) {
         return _createAndroidViewController(
-            hybridComposition: useHybridComposition,
+            compositionMode: compositionMode,
             id: params.id,
             viewType: 'com.pichillilorenzo/flutter_inappwebview',
             layoutDirection:
@@ -381,14 +421,52 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
     );
   }
 
+  /// Which composition mode this WebView asked for, after falling back where necessary.
+  ///
+  /// [InAppWebViewSettings.androidCompositionMode] wins when set; otherwise the deprecated
+  /// [InAppWebViewSettings.useHybridComposition] still decides, so existing code keeps its
+  /// behaviour. A request for HCPP is downgraded to Texture Layer Hybrid Composition unless the
+  /// device and application actually support it.
+  AndroidCompositionMode _resolveCompositionMode(
+    InAppWebViewSettings initialSettings,
+  ) {
+    final requested =
+        (params.initialSettings != null
+            ? initialSettings.androidCompositionMode
+            : null) ??
+        ((params.initialSettings != null
+                    ? initialSettings.useHybridComposition
+                    // ignore: deprecated_member_use_from_same_package
+                    : params.initialOptions?.android.useHybridComposition) ??
+                false
+            ? AndroidCompositionMode.HYBRID_COMPOSITION
+            : AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION);
+
+    if (requested == AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS &&
+        !isHybridCompositionPlusPlusSupported) {
+      return AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION;
+    }
+    return requested;
+  }
+
   AndroidViewController _createAndroidViewController({
-    required bool hybridComposition,
+    required AndroidCompositionMode compositionMode,
     required int id,
     required String viewType,
     required TextDirection layoutDirection,
     required Map<String, dynamic> creationParams,
   }) {
-    if (hybridComposition) {
+    if (compositionMode ==
+        AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS) {
+      return PlatformViewsService.initHybridAndroidView(
+        id: id,
+        viewType: viewType,
+        layoutDirection: layoutDirection,
+        creationParams: creationParams,
+        creationParamsCodec: const StandardMessageCodec(),
+      );
+    }
+    if (compositionMode == AndroidCompositionMode.HYBRID_COMPOSITION) {
       return PlatformViewsService.initExpensiveAndroidView(
         id: id,
         viewType: viewType,
