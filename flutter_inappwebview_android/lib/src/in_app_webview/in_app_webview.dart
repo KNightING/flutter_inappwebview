@@ -61,6 +61,15 @@ Future<bool> precacheHybridCompositionPlusPlusSupport() {
 /// unresolved check is not a confirmation.
 bool get isHybridCompositionPlusPlusSupported => _hcppSupported;
 
+/// The support check backing the automatic composition mode, memoised.
+///
+/// Memoising matters: a `FutureBuilder` handed a fresh future on every rebuild would fall back
+/// to its waiting state and tear down a WebView that had already been created.
+Future<bool>? _autoModeProbe;
+
+Future<bool> _autoCompositionModeSupport() =>
+    _autoModeProbe ??= precacheHybridCompositionPlusPlusSupport();
+
 class AndroidInAppWebViewWidgetCreationParams
     extends PlatformInAppWebViewWidgetCreationParams {
   AndroidInAppWebViewWidgetCreationParams({
@@ -366,13 +375,75 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
       }
     }
 
-    // Keeps the answer fresh without blocking: if the first check ran before the engine was
-    // ready, this is what lets later WebViews still get HCPP.
-    if (!isHybridCompositionPlusPlusSupported) {
-      precacheHybridCompositionPlusPlusSupport();
+    if (!_isAutoCompositionMode(initialSettings)) {
+      return _buildPlatformView(
+        context: context,
+        initialSettings: initialSettings,
+        settingsMap: settingsMap,
+        pullToRefreshSettings: pullToRefreshSettings,
+        hcppSupported: isHybridCompositionPlusPlusSupported,
+      );
     }
 
-    final compositionMode = _resolveCompositionMode(initialSettings);
+    // Auto mode has to know the answer before creating the view -- the composition mode is fixed
+    // at creation and cannot be changed afterwards. Waiting here is what makes "use HCPP whenever
+    // it works" actually hold; deciding early would silently pin this WebView to TLHC whenever
+    // the check happened to still be in flight.
+    //
+    // The future is memoised, so a rebuild does not restart it and does not tear down a WebView
+    // that has already been created. initialData short-circuits the wait once the answer is
+    // already known, and the FutureBuilder stays in the tree either way so the shape never
+    // changes under an existing platform view.
+    return FutureBuilder<bool>(
+      future: _autoCompositionModeSupport(),
+      initialData: isHybridCompositionPlusPlusSupported ? true : null,
+      builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        return _buildPlatformView(
+          context: context,
+          initialSettings: initialSettings,
+          settingsMap: settingsMap,
+          pullToRefreshSettings: pullToRefreshSettings,
+          hcppSupported: snapshot.data!,
+        );
+      },
+    );
+  }
+
+  /// Whether this WebView left the composition mode unspecified, and therefore gets whichever
+  /// mode the device can actually run.
+  ///
+  /// The deprecated `useHybridComposition: true` still counts as a choice, so existing code that
+  /// asked for Hybrid Composition keeps getting it.
+  bool _isAutoCompositionMode(InAppWebViewSettings initialSettings) {
+    final explicit = params.initialSettings != null
+        ? initialSettings.androidCompositionMode
+        : null;
+    if (explicit != null) {
+      return false;
+    }
+    final legacy =
+        (params.initialSettings != null
+            ? initialSettings.useHybridComposition
+            // ignore: deprecated_member_use_from_same_package
+            : params.initialOptions?.android.useHybridComposition) ??
+        false;
+    return !legacy;
+  }
+
+  Widget _buildPlatformView({
+    required BuildContext context,
+    required InAppWebViewSettings initialSettings,
+    required Map<String, dynamic> settingsMap,
+    required Map<String, dynamic> pullToRefreshSettings,
+    required bool hcppSupported,
+  }) {
+    final compositionMode = _resolveCompositionMode(
+      initialSettings,
+      hcppSupported: hcppSupported,
+    );
 
     // The native side branches on a single boolean that really asks "is the WebView in the real
     // view hierarchy?". HCPP is, exactly like Hybrid Composition, so both report true.
@@ -433,15 +504,23 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
     );
   }
 
-  /// Which composition mode this WebView asked for, after falling back where necessary.
+  /// Which composition mode this WebView ends up with.
   ///
   /// [InAppWebViewSettings.androidCompositionMode] wins when set; otherwise the deprecated
   /// [InAppWebViewSettings.useHybridComposition] still decides, so existing code keeps its
-  /// behaviour. A request for HCPP is downgraded to Texture Layer Hybrid Composition unless the
-  /// device and application actually support it.
+  /// behaviour. With neither set the mode is chosen automatically: HCPP where it works, Texture
+  /// Layer Hybrid Composition everywhere else.
+  ///
+  /// A request for HCPP -- automatic or explicit -- is downgraded to Texture Layer Hybrid
+  /// Composition unless the device and application actually support it.
   AndroidCompositionMode _resolveCompositionMode(
-    InAppWebViewSettings initialSettings,
-  ) {
+    InAppWebViewSettings initialSettings, {
+    required bool hcppSupported,
+  }) {
+    final auto = hcppSupported
+        ? AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS
+        : AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION;
+
     final requested =
         (params.initialSettings != null
             ? initialSettings.androidCompositionMode
@@ -452,10 +531,10 @@ class AndroidInAppWebViewWidget extends PlatformInAppWebViewWidget {
                     : params.initialOptions?.android.useHybridComposition) ??
                 false
             ? AndroidCompositionMode.HYBRID_COMPOSITION
-            : AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION);
+            : auto);
 
     if (requested == AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS &&
-        !isHybridCompositionPlusPlusSupported) {
+        !hcppSupported) {
       return AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION;
     }
     return requested;
