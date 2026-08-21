@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview_internal_annotations/flutter_inappwebview_i
 import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_platform_interface.dart';
 
 import '../types/action_mode_menu_item.dart';
+import '../types/android_composition_mode.dart';
 import '../types/cache_mode.dart';
 import '../types/data_detector_types.dart';
 import '../types/font_hinting_style.dart';
@@ -1165,6 +1166,11 @@ because there isn't any way to make the website data store non-persistent for th
   ///Set to `true` to render the WebView through Flutter Hybrid Composition instead of the
   ///cheaper Texture Layer Hybrid Composition. The default value is `false`.
   ///Hybrid Composition is supported starting with Flutter v1.20+.
+  ///
+  ///This flag cannot express Hybrid Composition++. Prefer [androidCompositionMode], which
+  ///covers all three modes; this one is kept so existing code keeps working.
+  @Deprecated("Use androidCompositionMode instead")
+  @ExchangeableObjectProperty(leaveDeprecatedInToMapMethod: true)
   @SupportedPlatforms(
     platforms: [
       AndroidPlatform(
@@ -1175,6 +1181,32 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
     ],
   )
   bool? useHybridComposition;
+
+  ///How the WebView is composited with the Flutter UI.
+  ///The default value is [AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION].
+  ///
+  ///This supersedes the deprecated [useHybridComposition]. When this is non-null it wins;
+  ///when it is null the value of [useHybridComposition] is used instead
+  ///(`true` maps to [AndroidCompositionMode.HYBRID_COMPOSITION]).
+  ///
+  ///Only applies to the [PlatformInAppWebViewWidget] — [PlatformInAppBrowser] and
+  ///[PlatformHeadlessInAppWebView] do not go through a platform view, so composition mode
+  ///has no meaning for them.
+  ///
+  ///Can only be set through the initial settings: the composition mode is fixed when the
+  ///platform view is created and cannot be changed afterwards.
+  @SupportedPlatforms(
+    platforms: [
+      AndroidPlatform(
+        note:
+            """[AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS] additionally requires API 34+,
+a Vulkan-capable device, and the embedding application to declare
+`io.flutter.embedding.android.EnableHcpp` in its `AndroidManifest.xml`. When any of those is
+missing it falls back to [AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION].""",
+      ),
+    ],
+  )
+  AndroidCompositionMode_? androidCompositionMode;
 
   ///Set to `false` to stop the plugin keeping the focused input element visible when the
   ///soft keyboard opens. The default value is `true`.
@@ -3447,6 +3479,7 @@ as it can cause framerate drops on animations in Android 9 and lower (see [Hybri
     this.regexToCancelSubFramesLoading,
     this.regexToAllowSyncUrlLoading,
     this.useHybridComposition = false,
+    this.androidCompositionMode,
     this.keyboardAvoidance = true,
     this.useShouldInterceptRequest,
     this.useOnRenderProcessGone,
