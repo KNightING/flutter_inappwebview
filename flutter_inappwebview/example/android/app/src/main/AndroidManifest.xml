@@ -33,6 +33,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Opts release builds of this application into Hybrid Composition++ so the plugin's
+             AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS can take effect. For debug runs
+             use the hidden "flutter run" flag "enable-hcpp" instead; it passes the engine switch
+             "enable-hcpp-and-surface-control" at launch. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableHcpp"
+            android:value="true" />
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density"
             android:hardwareAccelerated="true"

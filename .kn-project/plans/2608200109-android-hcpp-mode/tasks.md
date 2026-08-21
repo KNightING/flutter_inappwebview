@@ -43,11 +43,11 @@
 
 - [x] 建立 API 36 模擬器並確認 Vulkan 與 SurfaceControl 可用
       （`isSurfaceControlEnabled=true`，需 `ImpellerBackend=vulkan` 才會選 Vulkan 後端）
-- [x] ~~example manifest 加 `EnableHcpp`~~ —— **該鍵無效**，真正開關是引擎 switch
-      `enable-hcpp-and-surface-control`（見 Key Decisions）
-- [x] 修正欄位文件註解中錯誤的 opt-in 說明（`EnableHcpp` 已自三個檔案移除）
-- [ ] 決定 example 要用什麼方式長期啟用 HCPP（Intent extra 即將被上游移除）
-      —— 目前以 `adb am start --ez enable-hcpp-and-surface-control true` 手動啟用
+- [x] example manifest 加 `EnableHcpp` —— 實測有效（release build 從 launcher 一般啟動即生效）
+- [x] 欄位文件的 opt-in 說明已更正為正解：release 用 `EnableHcpp` manifest meta-data，
+      開發期用隱藏旗標 `flutter run --enable-hcpp`
+- [x] example 的 HCPP 啟用方式已確定：manifest `EnableHcpp`（release）／`flutter run --enable-hcpp`（debug）。
+      不需要依賴即將被移除的 Intent extra 手動注入
 - [x] HCPP 模式：頁面正常渲染（模擬器截圖確認）
 - [x] HCPP 模式：捲動正常（實體 Android 16 平板）
 - [x] HCPP 模式：**`keyboardAvoidance` 正常**——實體平板上注音輸入法 composing、候選字列、
@@ -58,10 +58,11 @@
 - [x] **回歸**：TLHC 與 HC 於實體平板上切換後渲染正常；三種模式影片皆播放
       （HC 5.74→6.78、TLHC 5.85→6.88，皆 `advanced=true`）
 - [x] U2（API 29）：`checkIfSupported` 穩定為 `false`，模式降級為 TLHC，無 FATAL、行程存活
-- [ ] U2 的**視覺**確認（測試當下裝置停在鎖定畫面，未取得畫面佐證）
+- [x] U2 的**視覺**確認：HCPP 被選取但 `support=false`，頁面正常渲染、無白畫面，
+      靜默降級為 TLHC。Q2A 的設計目標達成
 
 ## Phase 5 — 收尾
 
-- [ ] 逐項覆核未超出 `## Impact Files` 所列範圍
-- [ ] 更新 `plan.md` 的 `- Status:` 與 `- Completed:`
-- [ ] 驗證限制（模擬器 vs 實機）明確寫入驗收紀錄
+- [x] 逐項覆核未超出 `## Impact Files` 所列範圍（7 檔 + example manifest，Java 端零改動）
+- [x] 更新 `plan.md` 的 `- Status:` 與 `- Completed:`
+- [x] 驗證限制（模擬器 vs 實機、裝置數量、未驗證項）已寫入 `plan.md`

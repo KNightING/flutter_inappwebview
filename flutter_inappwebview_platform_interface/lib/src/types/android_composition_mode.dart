@@ -29,10 +29,14 @@ class AndroidCompositionMode_ {
   ///SurfaceFlinger composites them. Full native fidelity without the thread merge.
   ///
   ///**Requires Android API 34+, Impeller running on Vulkan, and the embedding application to
-  ///have enabled the engine's `enable-hcpp-and-surface-control` flag.** A plugin cannot turn
-  ///HCPP on for the application; how that flag is supplied is decided by the app and by the
-  ///Flutter version in use, and the mechanism is still changing upstream -- consult the Flutter
-  ///documentation for the version you target rather than hard-coding a manifest key.
+  ///opt in.** A plugin cannot turn HCPP on for the application. The app opts in by declaring
+  ///
+  ///```xml
+  ///<meta-data android:name="io.flutter.embedding.android.EnableHcpp" android:value="true" />
+  ///```
+  ///
+  ///in its `AndroidManifest.xml` (this is what release builds use), or by running with
+  ///`flutter run --enable-hcpp` during development.
   ///
   ///When any requirement is missing the WebView falls back to
   ///[TEXTURE_LAYER_HYBRID_COMPOSITION]; nothing throws and nothing goes blank.

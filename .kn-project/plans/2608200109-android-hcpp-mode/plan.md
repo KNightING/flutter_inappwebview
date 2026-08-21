@@ -3,8 +3,8 @@
 - Created: 2026-08-20
 - Branch: `feature/2608200109-android-hcpp-mode`
 - Issue: KNightING/flutter_inappwebview#20
-- Status: In Progress
-- Completed: [Wait for Finish]
+- Status: Awaiting Archive
+- Completed: 2026-08-21
 
 ## Goals
 
@@ -119,6 +119,10 @@ Dart 在 HCPP 模式下對 native 送 `useHybridComposition: true` 即可。這�
 - `flutter_inappwebview_android/lib/src/inappwebview_platform.dart:23`
   — `registerWith()`，HCPP 支援度探測的啟動點。規劃時漏列。
 
+- `flutter_inappwebview/example/android/app/src/main/AndroidManifest.xml`
+  — example 的 HCPP opt-in（`io.flutter.embedding.android.EnableHcpp`）。規劃時漏列。
+  註：XML 註解內不得出現 `--`，寫 `flutter run --enable-hcpp` 會讓 manifest merger 解析失敗。
+
 ### D. 文件
 
 - `.kn-project/wiki/features/android-platform-view-composition.md`
@@ -189,6 +193,23 @@ iPad（無關）。**兩者皆不符合，現階段無法驗證任何 HCPP 實�
 
 ## Key Decisions
 
+- **[Phase 5 覆核]** 以 `origin/main` 為基準比對，本分支變更共 7 檔 + example manifest。
+  Java 端如 Q3A 決議**完全未改動**。`## Impact Files` 於執行中補列了 5 項
+  （`types/main.dart`、新列舉兩檔、settings 建構子參數列、`inappwebview_platform.dart`），
+  Phase 5 再補 example manifest 一項，全部皆為已核准決策的直接衍生，無範圍外變更。
+  註：初次覆核誤把 Windows 三檔算進來，實為本地 `main` 落後於 `origin/main`
+  （分支由 `gh issue develop` 從遠端 main 切出，已含 PR #19），非誤提交。
+
+### 驗證涵蓋範圍與限制
+
+- **HCPP 正面驗證**：實體 Android 16 平板（model 25097RP43G）為主要依據，API 36 模擬器為輔。
+  **僅此兩台**，未做裝置矩陣測試。
+- **模擬器需要 `ImpellerBackend=vulkan` 才走 Vulkan 後端；實機不需要**（引擎自行選用）。
+  該設定**不可**作為通用建議——在 Android 10 的 U2 上會造成啟動即崩潰。
+- **降級路徑**：U2（API 29）確認 `support=false` → 降級 TLHC → 正常渲染、無白畫面。
+- **未驗證**：`InAppBrowser` 與 `HeadlessInAppWebView` 不經過 platform view，僅以文件說明
+  合成模式對其不適用，未實際跑過；其他平台不受本計畫影響，未回歸測試。
+
 - **[Phase 4 實測]** 影片播放於 HCPP / HC / TLHC 三種模式**皆正常**——判準取
   `video.currentTime` 是否前進，而非目視單一幀（靜止幀與黑框都可能誤判為正常）。
   三種模式的 `currentTime` 皆在一秒內前進約 1.03 秒且 `paused=false`。
@@ -206,13 +227,21 @@ iPad（無關）。**兩者皆不符合，現階段無法驗證任何 HCPP 實�
 - **[Phase 4 修正判讀]** 曾一度觀察到「HCPP 下畫面空白」，實為**捲動捲過頁面內容**
   （探針頁面底部有 120vh 空白）所致。乾淨啟動下 HCPP 渲染正常，該判讀已推翻。
 
-- **[Phase 4 實測，推翻文件]** HCPP 的 opt-in **不是** `io.flutter.embedding.android.EnableHcpp`
-  manifest meta-data——Flutter 3.47 的 embedding jar 完全沒有該字串，`flutter run` 也沒有
-  `--enable-hcpp` 旗標。真正的開關是引擎 switch **`enable-hcpp-and-surface-control`**
-  （字串出現在 `libflutter.so`，且由 `FlutterShellArgs.fromIntent()` 讀取）。
-  官方文件那頁在此版本已過時。**已提交的欄位文件註解據此描述，必須修正。**
-  另註：Flutter 已警告「經由 Intent extra 設定引擎旗標」即將移除
-  （flutter/flutter#180686），長期的正確設法待查。
+- **[Phase 4，先錯後正：opt-in 機制]** 我一度斷定官方文件過時、`EnableHcpp` manifest 鍵
+  與 `flutter run --enable-hcpp` 在 3.47 都不存在。**兩個結論都是錯的**，錯在驗證方法：
+  - `--enable-hcpp` 是**隱藏旗標**（`flutter_command.dart:1326` 的 `hide: !verboseHelp`），
+    由 `run.dart:259` 註冊，所以 `flutter run --help` 看不到它。
+  - manifest 鍵由**工具端**讀取（`project.dart:1102 computeHcppEnabled()`），不在 embedding
+    jar 裡；我用 grep embedding jar 來否證它，而同一套方法也會「證明」公認有效的
+    `EnableImpeller` 不存在——**方法本身無效**。
+  - 我唯一一次對 manifest 鍵的實測也不成立：該鍵走 release build 路徑，而我測的是
+    `flutter run`（未帶 `--enable-hcpp` 就不會傳 intent extra）。
+
+  **補做的決定性測試**：帶 `EnableHcpp` 的 **release APK**，從 launcher 一般啟動、不帶任何
+  intent extra，於實體 Android 16 平板上得到 `Using the Impeller rendering backend (Vulkan)`
+  與 `support=true`。**官方文件的兩條路徑都正確**，欄位文件已據此改回。
+  `enable-hcpp-and-surface-control` 是引擎層 switch，是上述兩條路徑最終落到的同一個開關
+  （`android_device.dart:673` 以 `--ez` 傳入），不是使用端要直接接觸的介面。
 - **[Phase 4 實測，發現並修正實作 bug]** 在 `registerWith()` 呼叫 `checkIfSupported()`
   會得到 `false`，即使裝置完全支援——實測 API 36 模擬器：`registerWith` 時為 `false`，
   同一支 app 在 `initState` 問則為 `true`。原實作把該 `false` 永久快取，等於讓 HCPP
