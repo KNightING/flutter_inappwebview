@@ -22,6 +22,10 @@ class AndroidInAppWebViewPlatform extends InAppWebViewPlatform {
   /// Registers this class as the default instance of [InAppWebViewPlatform].
   static void registerWith() {
     InAppWebViewPlatform.instance = AndroidInAppWebViewPlatform();
+    // The platform view factory picks a composition mode synchronously, so whether Hybrid
+    // Composition++ is available has to be known by then. Start resolving it here, at the
+    // earliest point the plugin runs any Dart code.
+    precacheHybridCompositionPlusPlusSupport();
   }
 
   /// Creates a new [AndroidCookieManager].
