@@ -5,13 +5,13 @@
 ## Summary
 
 Android 的 WebView 以何種方式與 Flutter 畫面合成，由 `InAppWebViewSettings.androidCompositionMode`
-決定，三種模式為 TLHC（**本 fork 預設**）、HC、HCPP。舊的布林 `useHybridComposition` 仍可用但已
-deprecated。此設定只能於 `initialSettings` 指定，且會決定 `InputAwareWebView` 的 IME 代理路徑
-是否啟用。
+決定，三種模式為 TLHC、HC、HCPP。**不設此欄位時自動選擇**：HCPP 可用就用 HCPP，否則 TLHC。
+舊的布林 `useHybridComposition` 仍可用但已 deprecated。此設定只能於 `initialSettings` 指定，
+且會決定 `InputAwareWebView` 的 IME 代理路徑是否啟用。
 
 ## 三種模式
 
-| | `TEXTURE_LAYER_HYBRID_COMPOSITION`（預設） | `HYBRID_COMPOSITION` | `HYBRID_COMPOSITION_PLUS_PLUS` |
+| | `TEXTURE_LAYER_HYBRID_COMPOSITION` | `HYBRID_COMPOSITION` | `HYBRID_COMPOSITION_PLUS_PLUS` |
 | :--- | :--- | :--- | :--- |
 | 慣稱 | TLHC | HC | HCPP |
 | Flutter API | `initSurfaceAndroidView` | `initExpensiveAndroidView` | `initHybridAndroidView` |
@@ -30,16 +30,30 @@ TLHC 在不支援的裝置上由 Flutter 引擎自動退回 HC。HCPP 在條件�
 
 ## 設定方式
 
+**什麼都不設就是自動選擇**——HCPP 可用時用 HCPP，否則 TLHC：
+
 ```dart
 InAppWebView(
-  initialSettings: InAppWebViewSettings(
-    androidCompositionMode: AndroidCompositionMode.HYBRID_COMPOSITION_PLUS_PLUS,
-  ),
+  initialSettings: InAppWebViewSettings(),
 )
 ```
 
-`androidCompositionMode` 非 null 時勝出；為 null 時才沿用 deprecated 的 `useHybridComposition`
-（`true` 對應 `HYBRID_COMPOSITION`）。兩者都未設就是 TLHC。
+要固定某一種模式才需要指定。想明確排除 HCPP 就 pin TLHC：
+
+```dart
+InAppWebViewSettings(
+  androidCompositionMode: AndroidCompositionMode.TEXTURE_LAYER_HYBRID_COMPOSITION,
+)
+```
+
+優先順序：`androidCompositionMode` 非 null 時勝出；為 null 且 deprecated 的
+`useHybridComposition` 為 `true` 時走 HC（既有程式碼行為不變）；兩者都未設才是自動選擇。
+
+> [!NOTE]
+> **自動選擇會等支援度探測完成才建立 WebView。** 合成模式在 platform view 建立當下就定死，
+> 提早決定會讓「有沒有吃到 HCPP」取決於 App 的啟動時序。代價是每個 session 的**第一個**
+> WebView 延後一個 platform channel 往返；之後的用快取答案、不延遲。明確指定模式則完全
+> 不等待。
 
 合成模式對 `InAppBrowser` 與 `HeadlessInAppWebView` **不適用**——它們不經過 platform view。
 
@@ -107,6 +121,8 @@ deprecated 的 `useHybridComposition` 有三個字面預設值，改動時必須
   `setSettings` 改不動。
 - **與上游行為分歧**。上游預設 HC；從上游遷移且依賴 HC 行為的使用端，需自行指定
   `AndroidCompositionMode.HYBRID_COMPOSITION` 還原。
+- **未 opt-in 的 app 不受自動選擇影響**。沒有宣告 `EnableHcpp`（或未以 `--enable-hcpp`
+  執行）時支援度為 `false`，自動選擇一律得到 TLHC。
 - **HCPP 的驗證涵蓋兩台裝置**（一台 Android 16 實機、一台 API 36 模擬器），非裝置矩陣。
   模擬器需強制 Vulkan 後端才走得到 HCPP，實機不需要。
 
@@ -114,7 +130,8 @@ deprecated 的 `useHybridComposition` 有三個字面預設值，改動時必須
 
 - 歸檔計畫：[2608191735-webview-render-perf](../../archive/2608191735-webview-render-perf.md)
   （預設改為 TLHC）、[2608200109-android-hcpp-mode](../../archive/2608200109-android-hcpp-mode.md)
-  （新增 HCPP）
+  （新增 HCPP）、[2608211304-android-hcpp-auto-default](../../archive/2608211304-android-hcpp-auto-default.md)
+  （預設改為自動選擇）
 - 相關節點：[軟鍵盤避讓](keyboard-avoidance.md)——本頁的 IME 代理路徑直接關係到該功能
 - Flutter 官方說明：`https://docs.flutter.dev/platform-integration/android/platform-views`
   （API 對應有誤，見上方註記）
