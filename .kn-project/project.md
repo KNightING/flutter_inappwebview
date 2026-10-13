@@ -160,3 +160,9 @@ Android / iOS / macOS 三平台的宣告皆位於各自的 `plugin_scripts_js` /
 
 軟鍵盤避讓所需的錨點（`InputAwareWebView` / `InAppWebView` / `InAppWebViewSettings`）兩邊相同，
 改用本 repo 無工作損失。
+
+## 版本紀錄
+
+只記併回主幹，發佈狀態以 GitHub Release 為準。
+
+- 6.2.0-beta.3.6 — 併回主幹 2026-10-13（主套件與平台實作的 pubspec 改用 `path:` 依賴，使用端免 `dependency_overrides`）
