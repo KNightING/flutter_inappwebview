@@ -21,6 +21,30 @@ fork 的目的不是追隨或改造上游，而是**把使用端反覆重造的�
   此決定的完整比對見本檔末的「為何不是 zikzak fork」。
 - **不發佈 pub.dev**：使用端一律以 `git:` + `path:` 依賴引用。若有 transitive 依賴從 pub.dev
   拉 `flutter_inappwebview`，使用端需以 `dependency_overrides` 收斂。
+- **使用端只寫一個依賴，不需要 `dependency_overrides`**（自 `6.2.0-beta.3.6` 起）：
+  主套件與各平台實作的 `pubspec.yaml` 對同 repo 套件一律用相對 `path:`，pub 因此不會
+  從 pub.dev 解析它們。
+
+  ```yaml
+  flutter_inappwebview:
+    git:
+      url: https://github.com/KNightING/flutter_inappwebview.git
+      ref: 6.2.0-beta.3.6
+      path: flutter_inappwebview
+  ```
+
+  **這 7 個 `pubspec.yaml` 是與上游的固定 delta**：`flutter_inappwebview`（對
+  platform_interface 與 6 個平台實作）、`flutter_inappwebview_{android,ios,macos,windows,web,linux}`
+  （對 platform_interface）。缺任何一個，使用端解析時會報「平台實作依賴 hosted 的
+  platform_interface、主套件依賴 git 的 platform_interface」而失敗。
+  `flutter_inappwebview_platform_interface` 本身不用改（它只依賴 hosted 的
+  `internal_annotations`，與 WebView 無關）。
+
+  **同步上游時**：拉取後若這 7 個檔案出現衝突（或上游升級了依賴版本），一律接受上游的內容，
+  再把每一組 `flutter_inappwebview_xxx: ^<版本>` 加其下一行 `# path: ../flutter_inappwebview_xxx`
+  （共兩行）改成 `flutter_inappwebview_xxx:` 加 `path: ../flutter_inappwebview_xxx`（兩行），
+  版本號隨之拿掉（`path` 依賴不得同時帶版本約束）。漏做的症狀是使用端 `flutter pub get`
+  立刻失敗，不會悄悄潛伏。
 - **PR 一律指向 `KNightING/flutter_inappwebview`**：本 repo 是 GitHub 上 `pichillilorenzo` 的
   正式 fork，`gh pr create` **預設會指向 parent**——誤射會把變更送進他人的公開 repo。
   每次開 PR 前仍應確認目標 repo。
@@ -136,3 +160,9 @@ Android / iOS / macOS 三平台的宣告皆位於各自的 `plugin_scripts_js` /
 
 軟鍵盤避讓所需的錨點（`InputAwareWebView` / `InAppWebView` / `InAppWebViewSettings`）兩邊相同，
 改用本 repo 無工作損失。
+
+## 版本紀錄
+
+只記併回主幹，發佈狀態以 GitHub Release 為準。
+
+- 6.2.0-beta.3.6 — 併回主幹 2026-10-13（主套件與平台實作的 pubspec 改用 `path:` 依賴，使用端免 `dependency_overrides`）
